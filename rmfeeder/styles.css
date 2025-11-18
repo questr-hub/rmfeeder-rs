@@ -1,0 +1,200 @@
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Charter", serif;
+  font-size: 16pt;
+  line-height: 1.28;
+  color: #111;
+  background: #fff;
+  -webkit-print-color-adjust: exact;
+}
+
+/* Use full content box defined by PDF margins */
+main {
+  margin: 0;
+  padding: 0;
+}
+
+/* Page breaks */
+.page-break {
+  page-break-after: always;
+  break-after: page;
+}
+
+/* Headings */
+h1 {
+  font-size: 2.4em;
+  margin: 0 0 0.4em 0;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+h2, h3, h4, h5, h6 {
+  margin-top: 1.4em;
+  margin-bottom: 0.4em;
+  font-weight: bold;
+  page-break-after: avoid;
+  page-break-inside: avoid;
+}
+
+/* Paragraphs – no indent, space between */
+p {
+  margin: 0 0 1.05em 0;
+  orphans: 3;
+  widows: 3;
+}
+
+/* Images */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.6em auto;
+}
+
+/* Blockquotes */
+blockquote {
+  margin: 0.9em 0;
+  padding-left: 2em;
+  border-left: 3pt solid #000;
+  font-size: 0.9em;
+  line-height: 1.44;
+}
+
+/* Code + Preformatted */
+code,
+pre {
+  font-family: Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+pre {
+  border: 0.25pt solid #000;
+  padding: 0.75em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Links — clean, no inline URL */
+a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Remove URL expansion completely */
+a::after {
+  content: "";
+}
+
+/* --- Cover page --- */
+
+.cover-page {
+  text-align: left;
+}
+
+.cover-title {
+  font-size: 4em;
+  margin: 0 0 0.5em 0;
+}
+
+.cover-subtitle {
+  font-size: 2em;
+  margin: 0 0 0.5em 0;
+}
+
+.cover-extra {
+  font-size: 0.9em;
+  margin: 0 0 0.25em 0;
+}
+
+.cover-date {
+  font-size: 0.9em;
+  font-style: italic;
+}
+
+/* --- TOC Styles --- */
+
+.toc-emoji {
+  float: right;
+  font-size: 1.3em;
+  margin: 0 0 0.4em 0;
+}
+
+.toc-title {
+  font-size: 2em;
+  margin: 0 0 0.8em 0;
+}
+
+.toc-groups {
+  clear: both;
+}
+
+.toc-group {
+  margin-bottom: 1em;
+}
+
+.toc-group-title {
+  font-weight: bold;
+  font-size: 1.1em;
+  margin: 0.8em 0 0.4em 0;
+}
+
+.toc-list {
+  list-style: disc;
+  padding-left: 1.4em;
+  margin: 0;
+}
+
+.toc-item {
+  margin-bottom: 0.5em; /* extra spacing for tap targets */
+  font-size: 1em;
+}
+
+/* optional, if you want feed names somewhere else later */
+.toc-source {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* --- Home Link Styles --- */
+
+.home-link-block {
+  margin: 0.5em 0 1em 0;
+}
+
+.home-link-block.bottom {
+  margin-top: 2em;
+}
+
+.home-link {
+  font-size: 0.9em;
+  text-decoration: underline;
+}
+
+/* --- Article layout tweaks --- */
+
+.article-header {
+  margin-bottom: 0.8em;
+}
+
+.article-title {
+  margin-bottom: 0.2em;
+}
+
+.article-source {
+  font-size: 0.9em;
+}
+
+.article-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.home-link {
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1.1em;    
+}
