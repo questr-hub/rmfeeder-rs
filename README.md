@@ -118,17 +118,6 @@ rmfeeder/
 
 ---
 
-## 🛣 Roadmap
-
-- CLI flags (output filename, title override, disable cover page, etc.)
-- EPUB output (via Pandoc)
-- Automatic send-to-reMarkable via MailHop alias
-- RSS/OPML feed ingestion
-- Daily digest mode
-- Improved styling presets (reMarkable, Kindle, desktop)
-
----
-
 ## 📄 License
 
 MIT
