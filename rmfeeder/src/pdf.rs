@@ -12,7 +12,10 @@ pub fn generate_pdf(
 
     let tmp_html = "/tmp/rmfeeder_tmp.html";
 
-    // Full HTML document for WeasyPrint — no page CSS here.
+    // Today’s date for the cover page
+    let today = chrono::Local::now().format("%B %e, %Y").to_string();
+
+    // Build HTML with a cover page, article header, and your CSS
     let full_html = format!(
 r#"<!DOCTYPE html>
 <html>
@@ -20,25 +23,41 @@ r#"<!DOCTYPE html>
 <meta charset="utf-8">
 <title>{title}</title>
 <style>
-/* Entire styling is controlled by styles.css */
 {base_css}
 </style>
 </head>
+
 <body>
+
+<!-- ===== COVER PAGE ===== -->
+<section class="cover-page">
+  <div class="cover-title">{title}</div>
+  <div class="cover-subtitle">rmfeeder Article</div>
+  <div class="cover-date">{today}</div>
+</section>
+
+<!-- ===== ARTICLE CONTENT ===== -->
 <main class="article-content">
-{body}
+
+  <header class="article-header">
+    <h1 class="article-title">{title}</h1>
+  </header>
+
+  {body}
+
 </main>
+
 </body>
 </html>
 "#,
         title = title,
         base_css = BASE_CSS,
+        today = today,
         body = body_html
     );
 
     write(tmp_html, full_html)?;
 
-    // Call WeasyPrint directly
     let status = Command::new("weasyprint")
         .arg(tmp_html)
         .arg(output_path)
