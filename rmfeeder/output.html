@@ -3,8 +3,227 @@
   <head>
     <meta charset="utf-8">
     <title>Rust (programming language)</title>
+    <style>
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Charter", serif;
+  font-size: 16pt;
+  line-height: 1.28;
+  color: #111;
+  background: #fff;
+  -webkit-print-color-adjust: exact;
+}
+
+/* Use full content box defined by PDF margins */
+main {
+  margin: 0;
+  padding: 0;
+}
+
+/* Page breaks */
+.page-break {
+  page-break-after: always;
+  break-after: page;
+}
+
+/* Headings */
+h1 {
+  font-size: 2.4em;
+  margin: 0 0 0.4em 0;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+h2, h3, h4, h5, h6 {
+  margin-top: 1.4em;
+  margin-bottom: 0.4em;
+  font-weight: bold;
+  page-break-after: avoid;
+  page-break-inside: avoid;
+}
+
+/* Paragraphs – no indent, space between */
+p {
+  margin: 0 0 1.05em 0;
+  orphans: 3;
+  widows: 3;
+}
+
+/* Images */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.6em auto;
+}
+
+/* Blockquotes */
+blockquote {
+  margin: 0.9em 0;
+  padding-left: 2em;
+  border-left: 3pt solid #000;
+  font-size: 0.9em;
+  line-height: 1.44;
+}
+
+/* Code + Preformatted */
+code,
+pre {
+  font-family: Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+pre {
+  border: 0.25pt solid #000;
+  padding: 0.75em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Links — clean, no inline URL */
+a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Remove URL expansion completely */
+a::after {
+  content: "";
+}
+
+/* --- Cover page --- */
+
+.cover-page {
+  text-align: left;
+}
+
+.cover-title {
+  font-size: 4em;
+  margin: 0 0 0.5em 0;
+}
+
+.cover-subtitle {
+  font-size: 2em;
+  margin: 0 0 0.5em 0;
+}
+
+.cover-extra {
+  font-size: 0.9em;
+  margin: 0 0 0.25em 0;
+}
+
+.cover-date {
+  font-size: 0.9em;
+  font-style: italic;
+}
+
+/* --- TOC Styles --- */
+
+.toc-emoji {
+  float: right;
+  font-size: 1.3em;
+  margin: 0 0 0.4em 0;
+}
+
+.toc-title {
+  font-size: 2em;
+  margin: 0 0 0.8em 0;
+}
+
+.toc-groups {
+  clear: both;
+}
+
+.toc-group {
+  margin-bottom: 1em;
+}
+
+.toc-group-title {
+  font-weight: bold;
+  font-size: 1.1em;
+  margin: 0.8em 0 0.4em 0;
+}
+
+.toc-list {
+  list-style: disc;
+  padding-left: 1.4em;
+  margin: 0;
+}
+
+.toc-item {
+  margin-bottom: 0.5em; /* extra spacing for tap targets */
+  font-size: 1em;
+}
+
+/* optional, if you want feed names somewhere else later */
+.toc-source {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* --- Home Link Styles --- */
+
+.home-link-block {
+  margin: 0.5em 0 1em 0;
+}
+
+.home-link-block.bottom {
+  margin-top: 2em;
+}
+
+.home-link {
+  font-size: 0.9em;
+  text-decoration: underline;
+}
+
+/* --- Article layout tweaks --- */
+
+.article-header {
+  margin-bottom: 0.8em;
+}
+
+.article-title {
+  margin-bottom: 0.2em;
+}
+
+.article-source {
+  font-size: 0.9em;
+}
+
+.article-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.home-link {
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 1.1em;    
+}
+
+html, body {
+  background: #fefefe;
+}
+
+main.article {
+  max-width: 700px;       /* classic readable line length */
+  margin: 2.5rem auto;    /* center the article */
+  padding: 0 1.25rem;     /* keep text off the edges */
+  box-sizing: border-box;
+}
+
+img {
+  border-radius: 4px;
+}
+
+    </style>
   </head>
   <body>
+    <main class="article">
 <div id="readability-page-1" class="page"><div lang="en" dir="ltr" id="mw-content-text">
 
 <table><tbody><tr><th colspan="2">Rust</th></tr><tr><td colspan="2"><span typeof="mw:File"><a href="https://en.wikipedia.org/wiki/File:Rust_programming_language_black_logo.svg"><img alt="Rust logo; a capital letter R set into a sprocket" src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Rust_programming_language_black_logo.svg/150px-Rust_programming_language_black_logo.svg.png" decoding="async" width="150" height="150" srcset="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Rust_programming_language_black_logo.svg/225px-Rust_programming_language_black_logo.svg.png 1.5x, https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Rust_programming_language_black_logo.svg/300px-Rust_programming_language_black_logo.svg.png 2x" data-file-width="106" data-file-height="106"></a></span></td></tr><tr><th scope="row"><a href="https://en.wikipedia.org/wiki/Programming_paradigm" title="Programming paradigm">Paradigms</a></th><td><ul><li><a href="https://en.wikipedia.org/wiki/Concurrent_computing" title="Concurrent computing">Concurrent</a></li><li><a href="https://en.wikipedia.org/wiki/Functional_programming" title="Functional programming">functional</a></li><li><a href="https://en.wikipedia.org/wiki/Generic_programming" title="Generic programming">generic</a></li><li><a href="https://en.wikipedia.org/wiki/Imperative_programming" title="Imperative programming">imperative</a></li><li><a href="https://en.wikipedia.org/wiki/Structured_programming" title="Structured programming">structured</a></li></ul></td></tr><tr><th scope="row"><a href="https://en.wikipedia.org/wiki/Software_developer" title="Software developer">Developer</a></th><td>The Rust Team</td></tr><tr><th scope="row">First&nbsp;appeared</th><td>January&nbsp;19, 2012<span>; 13 years ago</span></td></tr><tr><td colspan="2"></td></tr><tr><th scope="row"><a href="https://en.wikipedia.org/wiki/Software_release_life_cycle" title="Software release life cycle">Stable release</a></th><td><p>1.91.1<sup id="cite_ref-wikidata-7c27f26c8ca5697ddf981e5d1687aa8c4b8ba3c0-v20_1-0"><a href="#cite_note-wikidata-7c27f26c8ca5697ddf981e5d1687aa8c4b8ba3c0-v20-1"><span>[</span>1<span>]</span></a></sup>&nbsp;<span typeof="mw:File/Frameless"><a href="https://www.wikidata.org/wiki/Q575650?uselang=en#P348" title="Edit this on Wikidata"><img alt="Edit this on Wikidata" src="https://upload.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png" decoding="async" width="10" height="10" data-file-width="20" data-file-height="20"></a></span>
@@ -979,5 +1198,6 @@
 
 
 </div></div>
+    </main>
   </body>
 </html>
