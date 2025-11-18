@@ -1,6 +1,9 @@
 pub mod extractor;
 pub mod fetcher;
+pub mod epub;
 pub mod pdf;
+pub mod xhtml;      // ← ADD THIS
+pub mod multipdf;   // ← ALSO ADD THIS
 
 /// HTML preview (if you still want it)
 pub fn process_url(url: &str) -> String {

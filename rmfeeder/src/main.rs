@@ -1,7 +1,7 @@
 use std::env;
 
-mod pdf;
-mod multipdf;
+use rmfeeder::pdf;
+use rmfeeder::multipdf;
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();

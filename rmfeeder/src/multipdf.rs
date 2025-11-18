@@ -2,80 +2,102 @@ use std::error::Error;
 use std::fs::write;
 use std::process::Command;
 
-use crate::extractor;
-use crate::fetcher;
-use crate::xhtml;
+use crate::{extractor, fetcher};
 
 const BASE_CSS: &str = include_str!("../styles.css");
 
-pub fn generate_multi_pdf(
-    urls: &[String],
-    output_path: &str,
-) -> Result<(), Box<dyn Error>> {
+pub fn generate_multi_pdf(urls: &[String], output_path: &str) -> Result<(), Box<dyn Error>> {
+    let mut articles: Vec<(String, String)> = Vec::new();
 
-    let tmp_html = "/tmp/rmfeeder_multi.html";
-
-    let mut toc_items = String::new();
-    let mut article_sections = String::new();
-
-    for (i, url) in urls.iter().enumerate() {
-        let id = format!("article-{}", i + 1);
-
+    // -------- Fetch + extract articles --------
+    for url in urls {
         let normalized = fetcher::normalize_url(url)?;
         let html = fetcher::fetch_html(&normalized)?;
         let article = extractor::extract_article(&html, Some(&normalized))
             .ok_or("Extraction failed")?;
 
         let title = article.title;
-        let body = article.content.to_string();
-
-        // Add to TOC
-        toc_items.push_str(&format!(
-            r#"<li><a href="#{id}">{title}</a></li>"#
-        ));
-
-        // Add article block
-        article_sections.push_str(&format!(
-r#"<section id="{id}" class="article-block">
-    <h1>{title}</h1>
-    {body}
-    <a class="back-home" href="#toc">📄 Back to TOC</a>
-</section>
-"#));
+        let content_html = article.content.to_string();
+        articles.push((title, content_html));
     }
 
-    // Final HTML
+    // -------- Build Cover Page --------
+    let today = chrono::Local::now().format("%B %e, %Y").to_string();
+
+    let cover_html = format!(
+        "<section class=\"cover-page\">
+            <h1 class=\"cover-title\">rmfeeder — Reading Bundle</h1>
+            <h2 class=\"cover-subtitle\">Collected Articles</h2>
+            <p class=\"cover-date\">{date}</p>
+        </section>",
+        date = today.trim()
+    );
+
+    // -------- Build TOC --------
+    let mut toc_items = String::new();
+    for (idx, (title, _)) in articles.iter().enumerate() {
+        let id = format!("article-{}", idx + 1);
+        toc_items.push_str(&format!(
+            "<li><a href=\"#{}\">{}</a></li>\n",
+            id, title
+        ));
+    }
+
+    let toc_html = format!(
+        "<section class=\"toc-page\">
+            <h1 class=\"toc-title\">Contents</h1>
+            <ul class=\"toc-list\">
+            {items}
+            </ul>
+        </section>",
+        items = toc_items
+    );
+
+    // -------- Build Article Blocks --------
+    let mut article_blocks = String::new();
+    for (idx, (title, content_html)) in articles.iter().enumerate() {
+        let id = format!("article-{}", idx + 1);
+
+        article_blocks.push_str(&format!(
+            "<section id=\"{id}\" class=\"article-block\">
+                <h1>{title}</h1>
+                {body}
+                <p><a class=\"back-home\" href=\"#toc\">📄 Back to TOC</a></p>
+            </section>\n",
+            id = id,
+            title = title,
+            body = content_html
+        ));
+    }
+
+    // -------- Combine HTML --------
     let full_html = format!(
-r#"<!DOCTYPE html>
+        "<!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
+<meta charset=\"utf-8\">
+<title>rmfeeder – Multi Article</title>
 <style>
 {base_css}
 </style>
 </head>
-
 <body>
-
-<section id="toc" class="toc-page">
-  <h1 class="toc-title">Contents</h1>
-  <ul class="toc-list">
-    {toc_items}
-  </ul>
-</section>
-
-{article_sections}
-
+{cover}
+<a id=\"toc\"></a>
+{toc}
+{articles}
 </body>
-</html>
-"#,
+</html>",
         base_css = BASE_CSS,
-        toc_items = toc_items,
-        article_sections = article_sections
+        cover = cover_html,
+        toc = toc_html,
+        articles = article_blocks
     );
 
+    let tmp_html = "/tmp/rmfeeder_multi_tmp.html";
     write(tmp_html, full_html)?;
 
+    // -------- Generate PDF via WeasyPrint --------
     let status = Command::new("weasyprint")
         .arg(tmp_html)
         .arg(output_path)
