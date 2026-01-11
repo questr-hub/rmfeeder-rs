@@ -23,3 +23,4 @@ target
 urls.txt
 .DS_Store
 urls.txt
+*.opml
