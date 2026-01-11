@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs::write;
 use std::process::Command;
 
-use crate::escape_html;
+use crate::{escape_html, temp_html_path};
 
 const BASE_CSS: &str = include_str!("../styles.css");
 
@@ -12,7 +12,7 @@ pub fn generate_pdf(
     output_path: &str,
 ) -> Result<(), Box<dyn Error>> {
 
-    let tmp_html = "/tmp/rmfeeder_tmp.html";
+    let tmp_html = temp_html_path("rmfeeder_tmp");
 
     // Today’s date for the cover page
     let today = chrono::Local::now().format("%B %e, %Y").to_string();
@@ -59,12 +59,14 @@ r#"<!DOCTYPE html>
         body = body_html
     );
 
-    write(tmp_html, full_html)?;
+    write(&tmp_html, full_html)?;
 
     let status = Command::new("weasyprint")
-        .arg(tmp_html)
+        .arg(&tmp_html)
         .arg(output_path)
         .status()?;
+
+    let _ = std::fs::remove_file(&tmp_html);
 
     if !status.success() {
         return Err("WeasyPrint PDF generation failed".into());
