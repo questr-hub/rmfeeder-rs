@@ -74,10 +74,16 @@ cargo build --release
 cargo run -- "https://en.wikipedia.org/wiki/Rust_(programming_language)"
 ```
 
-Produces:
+Produces a timestamped PDF filename like:
 
 ```
-output.pdf
+2025-01-11-08-45-30.pdf
+```
+
+To set a custom filename:
+
+```bash
+cargo run -- --output article.pdf "https://en.wikipedia.org/wiki/Rust_(programming_language)"
 ```
 
 ---
@@ -85,7 +91,7 @@ output.pdf
 ### **Multi-Article Bundle**
 
 ```bash
-cargo run --   "https://example.com/article1"   "https://example.com/article2"
+cargo run -- "https://example.com/article1" "https://example.com/article2"
 ```
 
 Produces a multi-page PDF with:
@@ -123,4 +129,3 @@ rmfeeder/
 MIT
 
 ---
-
