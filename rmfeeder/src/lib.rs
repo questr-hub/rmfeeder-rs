@@ -51,3 +51,15 @@ pub fn escape_html(input: &str) -> String {
     }
     out
 }
+
+pub fn temp_html_path(prefix: &str) -> std::path::PathBuf {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let since_epoch = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let pid = std::process::id();
+    let filename = format!("{prefix}_{pid}_{since_epoch}.html");
+    std::env::temp_dir().join(filename)
+}

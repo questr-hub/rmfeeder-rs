@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs::write;
 use std::process::Command;
 
-use crate::{escape_html, extractor, fetcher};
+use crate::{escape_html, extractor, fetcher, temp_html_path};
 
 const BASE_CSS: &str = include_str!("../styles.css");
 
@@ -96,14 +96,16 @@ pub fn generate_multi_pdf(urls: &[String], output_path: &str) -> Result<(), Box<
         articles = article_blocks
     );
 
-    let tmp_html = "/tmp/rmfeeder_multi_tmp.html";
-    write(tmp_html, full_html)?;
+    let tmp_html = temp_html_path("rmfeeder_multi_tmp");
+    write(&tmp_html, full_html)?;
 
     // -------- Generate PDF via WeasyPrint --------
     let status = Command::new("weasyprint")
-        .arg(tmp_html)
+        .arg(&tmp_html)
         .arg(output_path)
         .status()?;
+
+    let _ = std::fs::remove_file(&tmp_html);
 
     if !status.success() {
         return Err("WeasyPrint PDF generation failed".into());
