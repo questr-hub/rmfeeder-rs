@@ -2,6 +2,8 @@ use std::error::Error;
 use std::fs::write;
 use std::process::Command;
 
+use crate::escape_html;
+
 const BASE_CSS: &str = include_str!("../styles.css");
 
 pub fn generate_pdf(
@@ -16,6 +18,7 @@ pub fn generate_pdf(
     let today = chrono::Local::now().format("%B %e, %Y").to_string();
 
     // Build HTML with a cover page, article header, and your CSS
+    let safe_title = escape_html(title);
     let full_html = format!(
 r#"<!DOCTYPE html>
 <html>
@@ -50,7 +53,7 @@ r#"<!DOCTYPE html>
 </body>
 </html>
 "#,
-        title = title,
+        title = safe_title,
         base_css = BASE_CSS,
         today = today,
         body = body_html

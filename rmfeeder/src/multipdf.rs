@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs::write;
 use std::process::Command;
 
-use crate::{extractor, fetcher};
+use crate::{escape_html, extractor, fetcher};
 
 const BASE_CSS: &str = include_str!("../styles.css");
 
@@ -37,9 +37,10 @@ pub fn generate_multi_pdf(urls: &[String], output_path: &str) -> Result<(), Box<
     let mut toc_items = String::new();
     for (idx, (title, _)) in articles.iter().enumerate() {
         let id = format!("article-{}", idx + 1);
+        let safe_title = escape_html(title);
         toc_items.push_str(&format!(
             "<li><a href=\"#{}\">{}</a></li>\n",
-            id, title
+            id, safe_title
         ));
     }
 
@@ -57,6 +58,7 @@ pub fn generate_multi_pdf(urls: &[String], output_path: &str) -> Result<(), Box<
     let mut article_blocks = String::new();
     for (idx, (title, content_html)) in articles.iter().enumerate() {
         let id = format!("article-{}", idx + 1);
+        let safe_title = escape_html(title);
 
         article_blocks.push_str(&format!(
             "<section id=\"{id}\" class=\"article-block\">
@@ -65,7 +67,7 @@ pub fn generate_multi_pdf(urls: &[String], output_path: &str) -> Result<(), Box<
                 <p><a class=\"back-home\" href=\"#toc\">📄 Back to TOC</a></p>
             </section>\n",
             id = id,
-            title = title,
+            title = safe_title,
             body = content_html
         ));
     }
