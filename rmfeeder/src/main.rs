@@ -1,7 +1,7 @@
 use std::env;
 
-use rmfeeder::pdf;
 use rmfeeder::multipdf;
+use rmfeeder::process_url_to_pdf;
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -14,9 +14,7 @@ fn main() {
     // Single article
     if args.len() == 1 {
         let url = &args[0];
-        let title = "Article";  // Will be overridden by extractor anyway
-
-        match pdf::generate_pdf(title, url, "output.pdf") {
+        match process_url_to_pdf(url, "output.pdf") {
             Ok(_) => println!("Wrote output.pdf"),
             Err(e) => eprintln!("Error: {}", e),
         }
