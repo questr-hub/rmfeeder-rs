@@ -9,6 +9,7 @@ use std::io::{BufRead, BufReader};
 fn main() {
     let mut input_file: Option<String> = None;
     let mut output_path: Option<String> = None;
+    let mut delay_secs: u64 = 0;
     let mut urls: Vec<String> = Vec::new();
     let mut args = env::args().skip(1);
 
@@ -25,10 +26,18 @@ fn main() {
                 std::process::exit(1);
             });
             input_file = Some(value);
+        } else if arg == "--delay" {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("Error: --delay requires a number");
+                std::process::exit(1);
+            });
+            delay_secs = parse_delay(&value);
         } else if let Some(value) = arg.strip_prefix("--output=") {
             output_path = Some(value.to_string());
         } else if let Some(value) = arg.strip_prefix("--file=") {
             input_file = Some(value.to_string());
+        } else if let Some(value) = arg.strip_prefix("--delay=") {
+            delay_secs = parse_delay(value);
         } else {
             urls.push(arg);
         }
@@ -54,7 +63,9 @@ fn main() {
     }
 
     if urls.is_empty() {
-        eprintln!("Usage: rmfeeder [--output <file.pdf>] [--file <path>] <url1> [url2] [url3] ...");
+        eprintln!(
+            "Usage: rmfeeder [--output <file.pdf>] [--file <path>] [--delay N] <url1> [url2] [url3] ..."
+        );
         std::process::exit(1);
     }
 
@@ -74,8 +85,15 @@ fn main() {
     }
 
     // Multi-article mode (TOC + article sections)
-    match multipdf::generate_multi_pdf(&urls, &output_path) {
+    match multipdf::generate_multi_pdf(&urls, &output_path, delay_secs) {
         Ok(_) => println!("Wrote {}", output_path),
         Err(e) => eprintln!("Error: {}", e),
     }
+}
+
+fn parse_delay(value: &str) -> u64 {
+    value.parse::<u64>().unwrap_or_else(|_| {
+        eprintln!("Error: --delay must be a non-negative number");
+        std::process::exit(1);
+    })
 }

@@ -1,13 +1,19 @@
 use std::error::Error;
 use std::fs::write;
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 use crate::{escape_html, extractor, fetcher, temp_html_path};
 use reqwest::StatusCode;
 
 const BASE_CSS: &str = include_str!("../styles.css");
 
-pub fn generate_multi_pdf(urls: &[String], output_path: &str) -> Result<(), Box<dyn Error>> {
+pub fn generate_multi_pdf(
+    urls: &[String],
+    output_path: &str,
+    delay_secs: u64,
+) -> Result<(), Box<dyn Error>> {
     let mut articles: Vec<(String, String)> = Vec::new();
 
     // -------- Fetch + extract articles --------
@@ -48,6 +54,14 @@ pub fn generate_multi_pdf(urls: &[String], output_path: &str) -> Result<(), Box<
         let title = article.title;
         let content_html = article.content.to_string();
         articles.push((title, content_html));
+
+        if delay_secs > 0 {
+            thread::sleep(Duration::from_secs(delay_secs));
+        }
+    }
+
+    if articles.is_empty() {
+        return Err("No articles fetched".into());
     }
 
     if articles.is_empty() {
