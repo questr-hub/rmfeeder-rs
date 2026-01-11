@@ -94,6 +94,12 @@ cargo run -- --output article.pdf "https://en.wikipedia.org/wiki/Rust_(programmi
 cargo run -- "https://example.com/article1" "https://example.com/article2"
 ```
 
+Optional delay between fetches (in seconds):
+
+```bash
+cargo run --bin rmfeeder -- --delay 2 "https://example.com/article1" "https://example.com/article2"
+```
+
 Produces a multi-page PDF with:
 
 - Cover page  
