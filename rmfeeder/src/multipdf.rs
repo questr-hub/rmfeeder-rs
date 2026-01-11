@@ -1,24 +1,67 @@
 use std::error::Error;
 use std::fs::write;
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 use crate::{escape_html, extractor, fetcher, temp_html_path};
+use reqwest::StatusCode;
 
 const BASE_CSS: &str = include_str!("../styles.css");
 
-pub fn generate_multi_pdf(urls: &[String], output_path: &str) -> Result<(), Box<dyn Error>> {
+pub fn generate_multi_pdf(
+    urls: &[String],
+    output_path: &str,
+    delay_secs: u64,
+) -> Result<(), Box<dyn Error>> {
     let mut articles: Vec<(String, String)> = Vec::new();
 
     // -------- Fetch + extract articles --------
     for url in urls {
-        let normalized = fetcher::normalize_url(url)?;
-        let html = fetcher::fetch_html(&normalized)?;
-        let article = extractor::extract_article(&html, Some(&normalized))
-            .ok_or("Extraction failed")?;
+        eprintln!("Fetching {}", url);
+        let normalized = match fetcher::normalize_url(url) {
+            Ok(value) => value,
+            Err(e) => {
+                eprintln!("Skipping {}: invalid URL: {}", url, e);
+                continue;
+            }
+        };
+
+        let html = match fetcher::fetch_html(&normalized) {
+            Ok(body) => body,
+            Err(e) => {
+                if let Some(status) = e.status() {
+                    if status == StatusCode::FORBIDDEN {
+                        eprintln!("Skipping {}: got 403 Forbidden", url);
+                    } else {
+                        eprintln!("Skipping {}: HTTP {}", url, status);
+                    }
+                } else {
+                    eprintln!("Skipping {}: request error: {}", url, e);
+                }
+                continue;
+            }
+        };
+
+        let article = match extractor::extract_article(&html, Some(&normalized)) {
+            Some(value) => value,
+            None => {
+                eprintln!("Skipping {}: extraction failed", url);
+                continue;
+            }
+        };
 
         let title = article.title;
         let content_html = article.content.to_string();
         articles.push((title, content_html));
+
+        if delay_secs > 0 {
+            thread::sleep(Duration::from_secs(delay_secs));
+        }
+    }
+
+    if articles.is_empty() {
+        return Err("No articles fetched".into());
     }
 
     // -------- Build Cover Page --------

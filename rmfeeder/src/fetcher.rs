@@ -7,7 +7,7 @@ pub fn normalize_url(input: &str) -> Result<String, Box<dyn Error>> {
     Ok(parsed.into())
 }
 
-pub fn fetch_html(url: &str) -> Result<String, Box<dyn Error>> {
+pub fn fetch_html(url: &str) -> Result<String, reqwest::Error> {
     let client = Client::builder()
         .user_agent("rmfeeder/0.1 (+https://example.com)")
         .build()?;
