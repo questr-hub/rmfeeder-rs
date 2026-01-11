@@ -12,7 +12,7 @@ pub fn fetch_html(url: &str) -> Result<String, Box<dyn Error>> {
         .user_agent("rmfeeder/0.1 (+https://example.com)")
         .build()?;
 
-    let res = client.get(url).send()?;
+    let res = client.get(url).send()?.error_for_status()?;
     let body = res.text()?;
     Ok(body)
 }
