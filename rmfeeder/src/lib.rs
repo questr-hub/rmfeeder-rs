@@ -84,7 +84,7 @@ pub fn summarize_html(
     pattern: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let summary = run_fabric(pattern, content_html)?;
-    let summary_html = text_to_html(&summary);
+    let summary_html = markdown_to_html(&summary);
     let safe_url = escape_html(source_url);
     let source_html = format!(
         "<p class=\"article-source\">Source: <a href=\"{url}\">{url}</a></p>",
@@ -93,19 +93,17 @@ pub fn summarize_html(
     Ok(format!("{}\n{}", source_html, summary_html))
 }
 
-fn text_to_html(input: &str) -> String {
+fn markdown_to_html(input: &str) -> String {
+    use pulldown_cmark::{html, Options, Parser};
+
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_TASKLISTS);
+
+    let parser = Parser::new_ext(input, options);
     let mut out = String::new();
-    for para in input.split("\n\n") {
-        let trimmed = para.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let escaped = escape_html(trimmed);
-        let with_breaks = escaped.replace('\n', "<br>");
-        out.push_str("<p>");
-        out.push_str(&with_breaks);
-        out.push_str("</p>\n");
-    }
+    html::push_html(&mut out, parser);
     out
 }
 
