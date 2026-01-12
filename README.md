@@ -69,6 +69,21 @@ cargo build --release
 
 ## 🚀 Usage
 
+### **OPML Helper**
+
+Generate a URL list from an OPML file (default 3 per feed), then feed it into rmfeeder:
+
+```bash
+cargo run --bin opml_helper -- --limit 3 --output urls.txt feeds.opml
+cargo run --bin rmfeeder -- --file urls.txt
+```
+
+Write URLs to stdout (no `--output`):
+
+```bash
+cargo run --bin opml_helper -- --limit 5 feeds.opml
+```
+
 ### **Single Article**
 
 ```bash
