@@ -14,3 +14,4 @@ chrono = "0.4"
 feed-rs = "1.4"
 roxmltree = "0.20"
 pulldown-cmark = "0.12"
+rusqlite = { version = "0.32", features = ["bundled"] }

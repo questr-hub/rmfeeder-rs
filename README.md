@@ -84,6 +84,13 @@ Write URLs to stdout (no `--output`):
 cargo run --bin opml_helper -- --limit 5 feeds.opml
 ```
 
+State behavior (default is stateful):
+
+```bash
+cargo run --bin opml_helper -- --no-state feeds.opml
+cargo run --bin opml_helper -- --clear-state feeds.opml
+```
+
 ### **Single Article**
 
 ```bash
