@@ -4,7 +4,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
-use crate::{escape_html, extractor, fetcher, temp_html_path};
+use crate::{escape_html, extractor, fetcher, summarize_html, temp_html_path};
 use reqwest::StatusCode;
 
 const BASE_CSS: &str = include_str!("../styles.css");
@@ -13,6 +13,8 @@ pub fn generate_multi_pdf(
     urls: &[String],
     output_path: &str,
     delay_secs: u64,
+    summarize: bool,
+    pattern: &str,
 ) -> Result<(), Box<dyn Error>> {
     let mut articles: Vec<(String, String)> = Vec::new();
 
@@ -52,16 +54,22 @@ pub fn generate_multi_pdf(
         };
 
         let title = article.title;
-        let content_html = article.content.to_string();
+        let content_html = if summarize {
+            match summarize_html(&article.content.to_string(), &normalized, pattern) {
+                Ok(value) => value,
+                Err(e) => {
+                    eprintln!("Skipping {}: summary failed: {}", url, e);
+                    continue;
+                }
+            }
+        } else {
+            article.content.to_string()
+        };
         articles.push((title, content_html));
 
         if delay_secs > 0 {
             thread::sleep(Duration::from_secs(delay_secs));
         }
-    }
-
-    if articles.is_empty() {
-        return Err("No articles fetched".into());
     }
 
     if articles.is_empty() {

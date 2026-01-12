@@ -53,6 +53,7 @@ When multiple URLs are passed:
 - Rust (`rustup`)
 - WeasyPrint (`brew install weasyprint`)
 - Python 3 and GTK libraries (automatically installed by brew)
+- Optional: fabric (`brew install fabric-ai`) for `--summarize`
 - macOS, Linux, or WSL
 
 ### Build
@@ -84,6 +85,18 @@ To set a custom filename:
 
 ```bash
 cargo run -- --output article.pdf "https://en.wikipedia.org/wiki/Rust_(programming_language)"
+```
+
+To generate a summary instead of the full article:
+
+```bash
+cargo run --bin rmfeeder -- --summarize "https://en.wikipedia.org/wiki/Rust_(programming_language)"
+```
+
+Use a different fabric pattern:
+
+```bash
+cargo run --bin rmfeeder -- --summarize --pattern extract_wisdom "https://en.wikipedia.org/wiki/Rust_(programming_language)"
 ```
 
 ---

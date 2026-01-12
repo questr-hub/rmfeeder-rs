@@ -2,7 +2,7 @@ use std::env;
 
 use chrono::Local;
 use rmfeeder::multipdf;
-use rmfeeder::process_url_to_pdf;
+use rmfeeder::process_url_to_pdf_with_options;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -10,6 +10,8 @@ fn main() {
     let mut input_file: Option<String> = None;
     let mut output_path: Option<String> = None;
     let mut delay_secs: u64 = 0;
+    let mut summarize = false;
+    let mut pattern: Option<String> = None;
     let mut urls: Vec<String> = Vec::new();
     let mut args = env::args().skip(1);
 
@@ -32,12 +34,24 @@ fn main() {
                 std::process::exit(1);
             });
             delay_secs = parse_delay(&value);
+        } else if arg == "--summarize" {
+            summarize = true;
+        } else if arg == "--pattern" {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("Error: --pattern requires a name");
+                std::process::exit(1);
+            });
+            pattern = Some(value);
+            summarize = true;
         } else if let Some(value) = arg.strip_prefix("--output=") {
             output_path = Some(value.to_string());
         } else if let Some(value) = arg.strip_prefix("--file=") {
             input_file = Some(value.to_string());
         } else if let Some(value) = arg.strip_prefix("--delay=") {
             delay_secs = parse_delay(value);
+        } else if let Some(value) = arg.strip_prefix("--pattern=") {
+            pattern = Some(value.to_string());
+            summarize = true;
         } else {
             urls.push(arg);
         }
@@ -64,7 +78,7 @@ fn main() {
 
     if urls.is_empty() {
         eprintln!(
-            "Usage: rmfeeder [--output <file.pdf>] [--file <path>] [--delay N] <url1> [url2] [url3] ..."
+            "Usage: rmfeeder [--output <file.pdf>] [--file <path>] [--delay N] [--summarize] [--pattern <name>] <url1> [url2] [url3] ..."
         );
         std::process::exit(1);
     }
@@ -72,11 +86,12 @@ fn main() {
     let output_path = output_path.unwrap_or_else(|| {
         format!("{}.pdf", Local::now().format("%Y-%m-%d-%H-%M-%S"))
     });
+    let pattern = pattern.unwrap_or_else(|| "summarize".to_string());
 
     // Single article
     if urls.len() == 1 {
         let url = &urls[0];
-        match process_url_to_pdf(url, &output_path) {
+        match process_url_to_pdf_with_options(url, &output_path, summarize, &pattern) {
             Ok(_) => println!("Wrote {}", output_path),
             Err(e) => eprintln!("Error: {}", e),
         }
@@ -85,7 +100,7 @@ fn main() {
     }
 
     // Multi-article mode (TOC + article sections)
-    match multipdf::generate_multi_pdf(&urls, &output_path, delay_secs) {
+    match multipdf::generate_multi_pdf(&urls, &output_path, delay_secs, summarize, &pattern) {
         Ok(_) => println!("Wrote {}", output_path),
         Err(e) => eprintln!("Error: {}", e),
     }
