@@ -73,6 +73,7 @@ This crate provides two binaries:
 
 - `rmfeeder` (fetch URLs and generate PDF)
 - `opml_helper` (read feeds OPML and emit article URLs)
+- `yt_helper` (read YouTube Watch Later, summarize, and build PDF bundle)
 
 ### **Configuration**
 
@@ -124,6 +125,59 @@ Default state DB path:
 ```text
 ~/.local/share/rmfeeder/rmfeeder_state.sqlite
 ```
+
+### **YouTube Helper**
+
+Build a Watch Later summary bundle PDF:
+
+```bash
+cargo run --bin yt_helper -- --watch-later
+```
+
+Default output filename:
+
+```text
+yt-watchlist-YYYY-MM-DD-HH-MM-SS.pdf
+```
+
+Common options:
+
+```bash
+cargo run --bin yt_helper -- --watch-later --output yt-bundle.pdf --limit 8 --pattern youtube_summary --delay 2
+```
+
+`--limit` is the number of videos included in the PDF (after local-state skips/failures).
+
+Cookie profile behavior:
+
+- By default, `yt_helper` uses `--cookies-from-browser chrome`, which means Chrome's default profile.
+- If your YouTube account is in a different Chrome profile, pass it explicitly:
+
+```bash
+cargo run --bin yt_helper -- --watch-later --cookies-from-browser "chrome:Profile 4"
+```
+
+- You can also set this in `rmfeeder.toml`:
+
+```toml
+yt_cookies_browser = "chrome:Profile 4"
+```
+
+Dry-run mode still generates the PDF, but does not update local state or YouTube watched status:
+
+```bash
+cargo run --bin yt_helper -- --watch-later --dry-run
+```
+
+Expected YouTube workflow:
+
+- `yt_helper` does not filter by YouTube watched state when reading Watch Later.
+- `yt_helper` uses local SQLite state (`~/.local/share/rmfeeder/rmfeeder_state.sqlite`) as the source of truth for "already processed".
+- Marking watched is a YouTube side effect only; videos may still remain in Watch Later until you remove them in YouTube's web/app UI.
+- Typical flow:
+  - run `yt_helper` to generate reading bundles
+  - keep items in Watch Later while deciding whether to watch full videos
+  - manually remove watched items in YouTube when done
 
 ### **Single Article**
 

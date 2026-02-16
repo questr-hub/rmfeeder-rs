@@ -34,18 +34,32 @@ main {
 
 /* Headings */
 h1 {
-  font-size: 2.4em;
-  margin: 0 0 0.4em 0;
+  font-family: "Avenir Next", -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 1.85em;
+  margin: 0 0 0.3em 0;
   letter-spacing: -0.03em;
   line-height: 1.1;
 }
 
 h2, h3, h4, h5, h6 {
-  margin-top: 1.4em;
+  font-family: "Avenir Next", -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  margin-top: 1.1em;
   margin-bottom: 0.4em;
   font-weight: bold;
   page-break-after: avoid;
   page-break-inside: avoid;
+}
+
+h2 {
+  font-size: 1.4em;
+}
+
+h3 {
+  font-size: 1.2em;
+}
+
+h4, h5, h6 {
+  font-size: 1.05em;
 }
 
 /* Paragraphs */
@@ -76,7 +90,7 @@ blockquote {
 /* Code + Preformatted */
 code,
 pre {
-  font-family: Menlo, Consolas, monospace;
+  font-family: "PT Mono",Menlo, Consolas, monospace;
   font-size: 0.85em;
 }
 
@@ -201,6 +215,10 @@ a::after {
 
 .article-title {
   margin-bottom: 0.2em;
+}
+
+.article-block > h1 {
+  font-size: 2em;
 }
 
 .article-source {

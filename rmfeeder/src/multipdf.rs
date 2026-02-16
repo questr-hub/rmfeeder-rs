@@ -72,19 +72,37 @@ pub fn generate_multi_pdf(
         }
     }
 
+    generate_pdf_bundle(
+        &articles,
+        output_path,
+        "rmfeeder ::<br>Reading Bundle",
+        "Collected Articles",
+    )
+}
+
+pub fn generate_pdf_bundle(
+    articles: &[(String, String)],
+    output_path: &str,
+    cover_title: &str,
+    cover_subtitle: &str,
+) -> Result<(), Box<dyn Error>> {
     if articles.is_empty() {
         return Err("No articles fetched".into());
     }
 
     // -------- Build Cover Page --------
     let today = chrono::Local::now().format("%B %e, %Y").to_string();
+    let safe_cover_title = escape_html(cover_title).replace("&lt;br&gt;", "<br>");
+    let safe_cover_subtitle = escape_html(cover_subtitle);
 
     let cover_html = format!(
         "<section class=\"cover-page\">
-            <h1 class=\"cover-title\">rmfeeder ::<br>Reading Bundle</h1>
-            <h2 class=\"cover-subtitle\">Collected Articles</h2>
+            <h1 class=\"cover-title\">{title}</h1>
+            <h2 class=\"cover-subtitle\">{subtitle}</h2>
             <p class=\"cover-date\">{date}</p>
         </section>",
+        title = safe_cover_title,
+        subtitle = safe_cover_subtitle,
         date = today.trim()
     );
 
