@@ -69,6 +69,28 @@ cargo build --release
 
 ## 🚀 Usage
 
+### **Configuration**
+
+If a `rmfeeder.toml` file is present, its values become defaults (CLI flags override):
+
+```toml
+state_db_path = "~/.local/share/rmfeeder/rmfeeder_state.sqlite"
+feeds_opml_path = "feeds.opml"
+urls_path = "urls.txt"
+output_dir = "output"
+limit = 3
+delay = 2
+summarize = true
+pattern = "summarize"
+```
+
+Use a different config path:
+
+```bash
+cargo run --bin rmfeeder -- --config ~/.config/rmfeeder/custom.toml --file urls.txt
+cargo run --bin opml_helper -- --config ~/.config/rmfeeder/custom.toml --limit 5 feeds.opml
+```
+
 ### **OPML Helper**
 
 Generate a URL list from an OPML file (default 3 per feed), then feed it into rmfeeder:

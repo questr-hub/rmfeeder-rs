@@ -5,6 +5,47 @@ pub mod pdf;
 pub mod xhtml;      // ← ADD THIS
 pub mod multipdf;   // ← ALSO ADD THIS
 
+use serde::Deserialize;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Default, Deserialize)]
+pub struct AppConfig {
+    pub state_db_path: Option<String>,
+    pub feeds_opml_path: Option<String>,
+    pub urls_path: Option<String>,
+    pub output_dir: Option<String>,
+    pub limit: Option<usize>,
+    pub delay: Option<u64>,
+    pub summarize: Option<bool>,
+    pub pattern: Option<String>,
+}
+
+pub fn load_config() -> Result<Option<AppConfig>, Box<dyn std::error::Error>> {
+    load_config_from_path("rmfeeder.toml")
+}
+
+pub fn load_config_from_path(path: &str) -> Result<Option<AppConfig>, Box<dyn std::error::Error>> {
+    let path = expand_tilde_path(path);
+    match std::fs::read_to_string(path) {
+        Ok(contents) => {
+            let cfg: AppConfig = toml::from_str(&contents)?;
+            Ok(Some(cfg))
+        }
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub fn expand_tilde_path(path: &str) -> PathBuf {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return Path::new(&home).join(rest);
+        }
+    }
+    PathBuf::from(path)
+}
+
 /// HTML preview (if you still want it)
 pub fn process_url(url: &str) -> String {
     let normalized = match fetcher::normalize_url(url) {

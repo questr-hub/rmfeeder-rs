@@ -5,20 +5,40 @@ use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use feed_rs::parser;
+use rmfeeder::{expand_tilde_path, load_config_from_path};
 use reqwest::blocking::Client;
 use roxmltree::Document;
 use rusqlite::{params, Connection, OptionalExtension};
 
 fn main() {
-    let mut output_path: Option<String> = None;
-    let mut limit: usize = 3;
+    let raw_args: Vec<String> = env::args().skip(1).collect();
+    let config_path = extract_config_path(&raw_args).unwrap_or_else(|| "rmfeeder.toml".to_string());
+
+    let config = match load_config_from_path(&config_path) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("Error: failed to load config {}: {}", config_path, e);
+            std::process::exit(1);
+        }
+    };
+
+    let mut output_path: Option<String> = config.as_ref().and_then(|c| c.urls_path.clone());
+    let mut limit: usize = config.as_ref().and_then(|c| c.limit).unwrap_or(3);
     let mut use_state = true;
     let mut clear_state = false;
-    let mut opml_path: Option<String> = None;
+    let mut opml_path: Option<String> = config.as_ref().and_then(|c| c.feeds_opml_path.clone());
+    let mut state_db_path: Option<String> = config.as_ref().and_then(|c| c.state_db_path.clone());
 
-    let mut args = env::args().skip(1);
+    let mut args = raw_args.into_iter();
     while let Some(arg) = args.next() {
-        if arg == "--output" {
+        if arg == "--config" {
+            if args.next().is_none() {
+                eprintln!("Error: --config requires a path");
+                std::process::exit(1);
+            }
+        } else if arg.starts_with("--config=") {
+            continue;
+        } else if arg == "--output" {
             let value = args.next().unwrap_or_else(|| {
                 eprintln!("Error: --output requires a path");
                 std::process::exit(1);
@@ -47,7 +67,9 @@ fn main() {
     }
 
     let opml_path = opml_path.unwrap_or_else(|| {
-        eprintln!("Usage: rmfeeder-opml [--limit N] [--output path] [--no-state] [--clear-state] <feeds.opml>");
+        eprintln!(
+            "Usage: rmfeeder-opml [--config <path>] [--limit N] [--output path] [--no-state] [--clear-state] <feeds.opml>"
+        );
         std::process::exit(1);
     });
 
@@ -78,7 +100,7 @@ fn main() {
         });
 
     let mut state = if use_state {
-        Some(init_state_db(clear_state))
+        Some(init_state_db(clear_state, state_db_path.take()))
     } else {
         None
     };
@@ -171,11 +193,14 @@ impl StateDb {
     }
 }
 
-fn init_state_db(clear_state: bool) -> StateDb {
-    let path = default_state_path().unwrap_or_else(|e| {
-        eprintln!("Error: failed to resolve state path: {}", e);
-        std::process::exit(1);
-    });
+fn init_state_db(clear_state: bool, custom_path: Option<String>) -> StateDb {
+    let path = match custom_path {
+        Some(path) => expand_tilde_path(&path),
+        None => default_state_path().unwrap_or_else(|e| {
+            eprintln!("Error: failed to resolve state path: {}", e);
+            std::process::exit(1);
+        }),
+    };
 
     if let Some(parent) = path.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
@@ -217,6 +242,25 @@ fn default_state_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
         .join("share")
         .join("rmfeeder")
         .join("rmfeeder_state.sqlite"))
+}
+
+fn extract_config_path(args: &[String]) -> Option<String> {
+    let mut i = 0usize;
+    while i < args.len() {
+        let arg = &args[i];
+        if arg == "--config" {
+            if i + 1 >= args.len() {
+                eprintln!("Error: --config requires a path");
+                std::process::exit(1);
+            }
+            return Some(args[i + 1].clone());
+        }
+        if let Some(value) = arg.strip_prefix("--config=") {
+            return Some(value.to_string());
+        }
+        i += 1;
+    }
+    None
 }
 
 fn load_opml_feed_urls(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
