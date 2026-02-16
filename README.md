@@ -48,6 +48,7 @@ All workflows render through the same PDF engine and styling system (cover page,
 - WeasyPrint (`brew install weasyprint`)
 - Python 3 and GTK libraries (automatically installed by brew)
 - Optional for build, required for summary workflows: `fabric-ai`
+- Optional for build, required for YouTube workflow: `yt-dlp`
 - macOS, Linux, or WSL
 
 ### Summary Workflow Dependencies
@@ -70,6 +71,26 @@ fabric-ai --version
 ```
 
 If `fabric-ai` is missing, summary commands will fail at runtime with a process/command-not-found style error.
+
+### YouTube Workflow Dependencies
+
+`yt-dlp` is not required to compile `rmfeeder`, but it is required for:
+
+- `yt_helper --watch-later`
+
+Install with Homebrew:
+
+```bash
+brew install yt-dlp
+```
+
+Verify installation:
+
+```bash
+yt-dlp --version
+```
+
+If `yt-dlp` is missing, `yt_helper` cannot fetch Watch Later entries.
 
 ### Build
 
@@ -114,6 +135,9 @@ cargo run --bin opml_helper -- --config ~/.config/rmfeeder/custom.toml --limit 5
 ```
 
 ### **OPML Helper**
+
+Current version note: OPML is a two-step workflow.
+There is no `rmfeeder --opml` flag yet.
 
 Generate a URL list from an OPML file (default 3 per feed), then feed it into rmfeeder:
 
