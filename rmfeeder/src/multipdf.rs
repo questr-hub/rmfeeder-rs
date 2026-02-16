@@ -81,7 +81,7 @@ pub fn generate_multi_pdf(
 
     let cover_html = format!(
         "<section class=\"cover-page\">
-            <h1 class=\"cover-title\">rmfeeder — Reading Bundle</h1>
+            <h1 class=\"cover-title\">rmfeeder ::<br>Reading Bundle</h1>
             <h2 class=\"cover-subtitle\">Collected Articles</h2>
             <p class=\"cover-date\">{date}</p>
         </section>",

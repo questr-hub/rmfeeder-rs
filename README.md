@@ -69,9 +69,15 @@ cargo build --release
 
 ## 🚀 Usage
 
+This crate provides two binaries:
+
+- `rmfeeder` (fetch URLs and generate PDF)
+- `opml_helper` (read feeds OPML and emit article URLs)
+
 ### **Configuration**
 
-If a `rmfeeder.toml` file is present, its values become defaults (CLI flags override):
+If a `rmfeeder.toml` file is present, its values become defaults (CLI flags override).
+By default, the app looks for `rmfeeder.toml` in the current working directory unless `--config` is passed.
 
 ```toml
 state_db_path = "~/.local/share/rmfeeder/rmfeeder_state.sqlite"
@@ -113,10 +119,16 @@ cargo run --bin opml_helper -- --no-state feeds.opml
 cargo run --bin opml_helper -- --clear-state feeds.opml
 ```
 
+Default state DB path:
+
+```text
+~/.local/share/rmfeeder/rmfeeder_state.sqlite
+```
+
 ### **Single Article**
 
 ```bash
-cargo run -- "https://en.wikipedia.org/wiki/Rust_(programming_language)"
+cargo run --bin rmfeeder -- "https://en.wikipedia.org/wiki/Rust_(programming_language)"
 ```
 
 Produces a timestamped PDF filename like:
@@ -128,7 +140,7 @@ Produces a timestamped PDF filename like:
 To set a custom filename:
 
 ```bash
-cargo run -- --output article.pdf "https://en.wikipedia.org/wiki/Rust_(programming_language)"
+cargo run --bin rmfeeder -- --output article.pdf "https://en.wikipedia.org/wiki/Rust_(programming_language)"
 ```
 
 To generate a summary instead of the full article:
@@ -148,7 +160,7 @@ cargo run --bin rmfeeder -- --summarize --pattern extract_wisdom "https://en.wik
 ### **Multi-Article Bundle**
 
 ```bash
-cargo run -- "https://example.com/article1" "https://example.com/article2"
+cargo run --bin rmfeeder -- "https://example.com/article1" "https://example.com/article2"
 ```
 
 Optional delay between fetches (in seconds):
