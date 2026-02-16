@@ -1,48 +1,42 @@
 # rmfeeder-rs
 
-`rmfeeder` is a Rust-based tool that fetches readable web articles, extracts clean content,
-and formats them into beautiful PDFs — perfect for the reMarkable tablet or any PDF reader.
+`rmfeeder` is a Rust-based reading-bundle tool for reMarkable and other PDF readers.
+It supports three core workflows with a shared visual output:
+- direct URLs
+- RSS/OPML feed workflows
+- YouTube Watch Later summaries
 
-This project now supports **single-article mode**, **multi-article bundles**, **cover pages**,  
-**table of contents (TOC)**, **navigation links**, and full **CSS-driven typography**.
+All workflows render through the same PDF engine and styling system (cover page, TOC, navigation links, and typography).
 
 ---
 
 ## ✨ Features
 
-### ✔ Single Article PDF
-- Fetch a URL
-- Extract readable content using `dom_smoothie`
-- Apply clean typography defined in `styles.css`
-- Convert to PDF with WeasyPrint
+### ✔ URL Reader to PDF
+- Single URL mode
+- Multi-URL bundle mode
+- Optional summary mode with `fabric-ai` (`--summarize`, `--pattern`)
 
-### ✔ Multi-Article PDF Bundles
-When multiple URLs are passed:
+### ✔ Feed Workflow (OPML + State)
+- `opml_helper` extracts recent article URLs from feeds in an OPML file
+- Local SQLite state avoids re-processing already-seen entries
+- Supports stateless runs (`--no-state`) and state reset (`--clear-state`)
 
-1. **Cover Page**
-   - Automatically generated
-   - Includes date
-   - Styled with large title fonts
+### ✔ YouTube Watch Later Workflow
+- `yt_helper` reads Watch Later via `yt-dlp`
+- Summarizes videos with `fabric-ai` patterns (default `youtube_summary`)
+- Builds a single reading bundle PDF from summaries
+- Local SQLite state dedupes already-processed videos
 
-2. **Table of Contents**
-   - Hyperlinks to each article section
-   - Built dynamically from article titles
-   - Clean layout through CSS
+### ✔ Shared Reading-Bundle UX
+- Auto cover page with date
+- Hyperlinked table of contents
+- Per-item sections with “Back to TOC” links
+- Consistent typography and layout via `styles.css`
 
-3. **Per-Article Sections**
-   - Each section gets:
-     - A header with the article title
-     - Extracted readable HTML content
-     - A “📄 Back to TOC” navigation link
-   - Proper page breaks, margins, spacing
-
-4. **Consistent Styling**
-   - All typography and layout comes from `styles.css`
-   - Easy to modify to adjust margins, fonts, or reMarkable optimization
-
-### ✔ WeasyPrint Rendering
-- HTML + CSS → high-quality PDF
-- Supports page size controls, margins, and custom fonts
+### ✔ WeasyPrint Rendering Pipeline
+- HTML + CSS to high-quality PDF
+- Common renderer across URL, OPML, and YouTube flows
 
 ---
 
@@ -53,8 +47,29 @@ When multiple URLs are passed:
 - Rust (`rustup`)
 - WeasyPrint (`brew install weasyprint`)
 - Python 3 and GTK libraries (automatically installed by brew)
-- Optional: fabric (`brew install fabric-ai`) for `--summarize`
+- Optional for build, required for summary workflows: `fabric-ai`
 - macOS, Linux, or WSL
+
+### Summary Workflow Dependencies
+
+`fabric-ai` is not required to compile `rmfeeder`, but it is required for:
+
+- `rmfeeder --summarize`
+- `yt_helper` (YouTube Watch Later summaries)
+
+Install with Homebrew:
+
+```bash
+brew install fabric-ai
+```
+
+Verify installation:
+
+```bash
+fabric-ai --version
+```
+
+If `fabric-ai` is missing, summary commands will fail at runtime with a process/command-not-found style error.
 
 ### Build
 
@@ -69,7 +84,7 @@ cargo build --release
 
 ## 🚀 Usage
 
-This crate provides two binaries:
+This crate provides three binaries:
 
 - `rmfeeder` (fetch URLs and generate PDF)
 - `opml_helper` (read feeds OPML and emit article URLs)
@@ -127,6 +142,8 @@ Default state DB path:
 ```
 
 ### **YouTube Helper**
+
+`yt_helper` requires `fabric-ai` to generate summaries.
 
 Build a Watch Later summary bundle PDF:
 
@@ -202,6 +219,8 @@ To generate a summary instead of the full article:
 ```bash
 cargo run --bin rmfeeder -- --summarize "https://en.wikipedia.org/wiki/Rust_(programming_language)"
 ```
+
+Note: `--summarize` requires `fabric-ai` to be installed and available on your `PATH`.
 
 Use a different fabric pattern:
 
