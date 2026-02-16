@@ -141,6 +141,8 @@ fn main() {
         eprintln!("Error: no videos found in Watch Later");
         std::process::exit(1);
     }
+    eprintln!("Mode: yt-watchlist-summary");
+    eprintln!("Pattern: {}", pattern);
 
     let mut state = if dry_run {
         None

@@ -134,6 +134,18 @@ cargo run --bin rmfeeder -- --config ~/.config/rmfeeder/custom.toml --file urls.
 cargo run --bin opml_helper -- --config ~/.config/rmfeeder/custom.toml --limit 5 feeds.opml
 ```
 
+### **Default Output Filenames**
+
+If `--output` is not provided, filenames are mode-based and timestamped:
+
+- `rmfeeder` single URL: `single-YYYY-MM-DD-HH-MM-SS.pdf`
+- `rmfeeder` single URL + `--summarize`: `single-summary-YYYY-MM-DD-HH-MM-SS.pdf`
+- `rmfeeder` bundle (multiple URLs or any `--file`): `bundle-YYYY-MM-DD-HH-MM-SS.pdf`
+- `rmfeeder` bundle + `--summarize`: `bundle-summary-YYYY-MM-DD-HH-MM-SS.pdf`
+- `yt_helper` watch later: `yt-watchlist-YYYY-MM-DD-HH-MM-SS.pdf`
+
+`--output` always overrides default naming.
+
 ### **OPML Helper**
 
 Current version note: OPML is a two-step workflow.
@@ -229,7 +241,7 @@ cargo run --bin rmfeeder -- "https://en.wikipedia.org/wiki/Rust_(programming_lan
 Produces a timestamped PDF filename like:
 
 ```
-2025-01-11-08-45-30.pdf
+single-2025-01-11-08-45-30.pdf
 ```
 
 To set a custom filename:
@@ -245,6 +257,12 @@ cargo run --bin rmfeeder -- --summarize "https://en.wikipedia.org/wiki/Rust_(pro
 ```
 
 Note: `--summarize` requires `fabric-ai` to be installed and available on your `PATH`.
+
+Single-article summary defaults to:
+
+```text
+single-summary-YYYY-MM-DD-HH-MM-SS.pdf
+```
 
 Use a different fabric pattern:
 
@@ -265,6 +283,14 @@ Optional delay between fetches (in seconds):
 ```bash
 cargo run --bin rmfeeder -- --delay 2 "https://example.com/article1" "https://example.com/article2"
 ```
+
+Default filename behavior for bundles:
+
+- no summarize: `bundle-YYYY-MM-DD-HH-MM-SS.pdf`
+- with summarize: `bundle-summary-YYYY-MM-DD-HH-MM-SS.pdf`
+- `--file` input is always treated as bundle mode for naming.
+
+`--output` always overrides default naming.
 
 Produces a multi-page PDF with:
 

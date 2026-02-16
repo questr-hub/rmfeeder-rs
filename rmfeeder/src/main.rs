@@ -26,6 +26,7 @@ fn main() {
     let mut summarize = config.as_ref().and_then(|c| c.summarize).unwrap_or(false);
     let mut pattern: Option<String> = config.as_ref().and_then(|c| c.pattern.clone());
     let mut urls: Vec<String> = Vec::new();
+    let mut file_input_used = false;
     let mut args = raw_args.into_iter();
 
     while let Some(arg) = args.next() {
@@ -82,6 +83,7 @@ fn main() {
     }
 
     if let Some(path) = input_file {
+        file_input_used = true;
         let file = File::open(&path).unwrap_or_else(|e| {
             eprintln!("Error: failed to open {}: {}", path, e);
             std::process::exit(1);
@@ -107,8 +109,19 @@ fn main() {
         std::process::exit(1);
     }
 
+    let mode = determine_mode(file_input_used, urls.len(), summarize);
     let output_path = output_path.unwrap_or_else(|| {
-        let filename = format!("{}.pdf", Local::now().format("%Y-%m-%d-%H-%M-%S"));
+        let prefix = match mode {
+            OutputMode::Single => "single",
+            OutputMode::SingleSummary => "single-summary",
+            OutputMode::Bundle => "bundle",
+            OutputMode::BundleSummary => "bundle-summary",
+        };
+        let filename = format!(
+            "{}-{}.pdf",
+            prefix,
+            Local::now().format("%Y-%m-%d-%H-%M-%S")
+        );
         if let Some(dir) = output_dir.take() {
             Path::new(&dir).join(filename).to_string_lossy().to_string()
         } else {
@@ -116,6 +129,10 @@ fn main() {
         }
     });
     let pattern = pattern.unwrap_or_else(|| "summarize".to_string());
+    eprintln!("Mode: {}", mode.as_str());
+    if summarize {
+        eprintln!("Pattern: {}", pattern);
+    }
 
     // Single article
     if urls.len() == 1 {
@@ -132,6 +149,39 @@ fn main() {
     match multipdf::generate_multi_pdf(&urls, &output_path, delay_secs, summarize, &pattern) {
         Ok(_) => println!("Wrote {}", output_path),
         Err(e) => eprintln!("Error: {}", e),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum OutputMode {
+    Single,
+    SingleSummary,
+    Bundle,
+    BundleSummary,
+}
+
+impl OutputMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Single => "single",
+            Self::SingleSummary => "single-summary",
+            Self::Bundle => "bundle",
+            Self::BundleSummary => "bundle-summary",
+        }
+    }
+}
+
+fn determine_mode(file_input_used: bool, url_count: usize, summarize: bool) -> OutputMode {
+    if !file_input_used && url_count == 1 {
+        if summarize {
+            OutputMode::SingleSummary
+        } else {
+            OutputMode::Single
+        }
+    } else if summarize {
+        OutputMode::BundleSummary
+    } else {
+        OutputMode::Bundle
     }
 }
 
