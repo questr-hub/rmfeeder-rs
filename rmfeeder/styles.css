@@ -90,7 +90,10 @@ pre {
 /* Links — clean, no inline URL */
 a {
   color: inherit;
-  text-decoration: underline;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: #666;
+  text-underline-offset: 0.12em;
 }
 
 /* Remove URL expansion completely */
@@ -133,7 +136,7 @@ a::after {
 .toc-page {
   page-break-after: always;
   padding-top: 1in;
-  padding-left: 0.75in;
+  padding-left: 0;
 }
 
 .toc-emoji {
@@ -162,14 +165,15 @@ a::after {
 }
 
 .toc-list {
-  list-style: none;
+  list-style: disc;
   margin: 0;
-  padding: 0;
+  padding-left: 1.2em;
 }
 
 .toc-list li {
   font-size: 1.2em;
-  margin: 0.2em 0;
+  line-height: 1.25;
+  margin: 0.45em 0 0.65em 0;
 }
 
 .toc-item {
@@ -183,8 +187,6 @@ a::after {
 }
 
 .toc-list a {
-  text-decoration: none;
-  border-bottom: 1px solid #000;
   color: #000;
 }
 
@@ -220,7 +222,10 @@ a::after {
 }
 
 .home-link {
-  text-decoration: none;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: #666;
+  text-underline-offset: 0.12em;
   font-weight: 500;
   font-size: 1.1em;
 }
@@ -229,5 +234,8 @@ a::after {
   display: block;
   margin-top: 1em;
   font-size: 1.1em;
-  text-decoration: none;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: #666;
+  text-underline-offset: 0.12em;
 }
