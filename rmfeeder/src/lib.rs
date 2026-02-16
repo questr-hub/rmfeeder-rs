@@ -19,6 +19,11 @@ pub struct AppConfig {
     pub delay: Option<u64>,
     pub summarize: Option<bool>,
     pub pattern: Option<String>,
+    pub yt_limit: Option<usize>,
+    pub yt_pattern: Option<String>,
+    pub yt_delay: Option<u64>,
+    pub yt_cookies_browser: Option<String>,
+    pub yt_mark_watched_on_success: Option<bool>,
 }
 
 pub fn load_config() -> Result<Option<AppConfig>, Box<dyn std::error::Error>> {
