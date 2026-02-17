@@ -6,9 +6,9 @@ use std::thread;
 use std::time::Duration;
 
 use chrono::Local;
-use pulldown_cmark::{html, Options, Parser};
-use rmfeeder::{escape_html, expand_tilde_path, load_config_from_path, multipdf, PageSize};
-use rusqlite::{params, Connection, OptionalExtension};
+use pulldown_cmark::{Options, Parser, html};
+use rmfeeder::{PageSize, escape_html, expand_tilde_path, load_config_from_path, multipdf};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::Deserialize;
 
 const WATCH_LATER_URL: &str = "https://www.youtube.com/playlist?list=WL";
@@ -119,10 +119,6 @@ fn main() {
         }
     }
 
-    if !mode_watch_later {
-        print_usage_and_exit();
-    }
-
     if dry_run {
         mark_watched_on_success = false;
     }
@@ -132,8 +128,21 @@ fn main() {
         std::process::exit(1);
     }
 
+    if clear_state && !mode_watch_later {
+        let _state = init_state_db(true, state_db_path.take());
+        println!("Cleared state DB");
+        return;
+    }
+
+    if !mode_watch_later {
+        print_usage_and_exit();
+    }
+
     let output_path = output_path.unwrap_or_else(|| {
-        let filename = format!("yt-watchlist-{}.pdf", Local::now().format("%Y-%m-%d-%H-%M-%S"));
+        let filename = format!(
+            "yt-watchlist-{}.pdf",
+            Local::now().format("%Y-%m-%d-%H-%M-%S")
+        );
         if let Some(dir) = output_dir.take() {
             Path::new(&dir).join(filename).to_string_lossy().to_string()
         } else {
@@ -261,6 +270,7 @@ fn print_usage_and_exit() -> ! {
     eprintln!(
         "Usage: yt_helper --watch-later [--config <path>] [--output <file.pdf>] [--limit N] [--pattern <name>] [--delay N] [--page-size <letter|rm2>] [--cookies-from-browser <name>] [--dry-run] [--clear-state]"
     );
+    eprintln!("   or: yt_helper [--config <path>] [--clear-state]");
     eprintln!(
         "  --dry-run: Generate PDF without side effects (no local state read/write, no mark-watched updates)."
     );
@@ -418,7 +428,9 @@ impl StateDb {
 
         let exists = self
             .conn
-            .query_row("SELECT 1 FROM seen WHERE url = ?1 LIMIT 1", [key], |_| Ok(()))
+            .query_row("SELECT 1 FROM seen WHERE url = ?1 LIMIT 1", [key], |_| {
+                Ok(())
+            })
             .optional()?
             .is_some();
         Ok(!exists)
@@ -449,7 +461,11 @@ fn init_state_db(clear_state: bool, custom_path: Option<String>) -> StateDb {
 
     if let Some(parent) = path.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
-            eprintln!("Error: failed to create state directory {}: {}", parent.display(), e);
+            eprintln!(
+                "Error: failed to create state directory {}: {}",
+                parent.display(),
+                e
+            );
             std::process::exit(1);
         }
     }
