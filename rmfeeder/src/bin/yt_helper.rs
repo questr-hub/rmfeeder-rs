@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use chrono::Local;
 use pulldown_cmark::{html, Options, Parser};
-use rmfeeder::{escape_html, expand_tilde_path, load_config_from_path, multipdf};
+use rmfeeder::{escape_html, expand_tilde_path, load_config_from_path, multipdf, PageSize};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 
@@ -44,6 +44,11 @@ fn main() {
     let mut clear_state = false;
     let mut output_dir: Option<String> = config.as_ref().and_then(|c| c.output_dir.clone());
     let mut state_db_path: Option<String> = config.as_ref().and_then(|c| c.state_db_path.clone());
+    let mut page_size = config
+        .as_ref()
+        .and_then(|c| c.page_size.as_deref())
+        .map(parse_page_size)
+        .unwrap_or(PageSize::Letter);
 
     let mut args = raw_args.into_iter();
     while let Some(arg) = args.next() {
@@ -86,8 +91,16 @@ fn main() {
                 std::process::exit(1);
             });
             delay_secs = parse_delay(&value);
+        } else if arg == "--page-size" {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("Error: --page-size requires a value (letter|rm2)");
+                std::process::exit(1);
+            });
+            page_size = parse_page_size(&value);
         } else if let Some(value) = arg.strip_prefix("--delay=") {
             delay_secs = parse_delay(value);
+        } else if let Some(value) = arg.strip_prefix("--page-size=") {
+            page_size = parse_page_size(value);
         } else if arg == "--cookies-from-browser" {
             let value = args.next().unwrap_or_else(|| {
                 eprintln!("Error: --cookies-from-browser requires a browser name");
@@ -143,6 +156,7 @@ fn main() {
     }
     eprintln!("Mode: yt-watchlist-summary");
     eprintln!("Pattern: {}", pattern);
+    eprintln!("Page size: {}", page_size.as_str());
 
     let mut state = if dry_run {
         None
@@ -230,6 +244,7 @@ fn main() {
         &output_path,
         "rmfeeder ::",
         "YouTube Watchlist",
+        page_size,
     ) {
         eprintln!("Error: failed to generate PDF: {}", e);
         std::process::exit(1);
@@ -244,7 +259,7 @@ fn main() {
 
 fn print_usage_and_exit() -> ! {
     eprintln!(
-        "Usage: yt_helper --watch-later [--config <path>] [--output <file.pdf>] [--limit N] [--pattern <name>] [--delay N] [--cookies-from-browser <name>] [--dry-run] [--clear-state]"
+        "Usage: yt_helper --watch-later [--config <path>] [--output <file.pdf>] [--limit N] [--pattern <name>] [--delay N] [--page-size <letter|rm2>] [--cookies-from-browser <name>] [--dry-run] [--clear-state]"
     );
     eprintln!(
         "  --dry-run: Generate PDF without side effects (no local state read/write, no mark-watched updates)."
@@ -265,6 +280,13 @@ fn parse_limit(value: &str) -> usize {
 fn parse_delay(value: &str) -> u64 {
     value.parse::<u64>().unwrap_or_else(|_| {
         eprintln!("Error: --delay must be a non-negative number");
+        std::process::exit(1);
+    })
+}
+
+fn parse_page_size(value: &str) -> PageSize {
+    PageSize::parse(value).unwrap_or_else(|| {
+        eprintln!("Error: --page-size must be one of: letter, rm2");
         std::process::exit(1);
     })
 }
