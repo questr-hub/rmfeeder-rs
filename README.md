@@ -33,6 +33,7 @@ All workflows render through the same PDF engine and styling system (cover page,
 - Hyperlinked table of contents
 - Per-item sections with “Back to TOC” links
 - Consistent typography and layout via `styles.css`
+- Selectable page size (`letter` default, `rm2` option)
 
 ### ✔ WeasyPrint Rendering Pipeline
 - HTML + CSS to high-quality PDF
@@ -121,6 +122,7 @@ state_db_path = "~/.local/share/rmfeeder/rmfeeder_state.sqlite"
 feeds_opml_path = "feeds.opml"
 urls_path = "urls.txt"
 output_dir = "output"
+page_size = "letter"
 limit = 3
 delay = 2
 summarize = true
@@ -133,6 +135,17 @@ Use a different config path:
 cargo run --bin rmfeeder -- --config ~/.config/rmfeeder/custom.toml --file urls.txt
 cargo run --bin opml_helper -- --config ~/.config/rmfeeder/custom.toml --limit 5 feeds.opml
 ```
+
+Page size can be selected per-run:
+
+```bash
+cargo run --bin rmfeeder -- --page-size rm2 --file urls.txt
+cargo run --bin yt_helper -- --watch-later --page-size rm2
+```
+
+Supported values:
+- `letter` (default)
+- `rm2`
 
 ### **Default Output Filenames**
 

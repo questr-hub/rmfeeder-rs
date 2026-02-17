@@ -2,7 +2,7 @@ use std::env;
 
 use chrono::Local;
 use rmfeeder::multipdf;
-use rmfeeder::{load_config_from_path, process_url_to_pdf_with_options};
+use rmfeeder::{load_config_from_path, process_url_to_pdf_with_options, PageSize};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -25,6 +25,11 @@ fn main() {
     let mut delay_secs: u64 = config.as_ref().and_then(|c| c.delay).unwrap_or(0);
     let mut summarize = config.as_ref().and_then(|c| c.summarize).unwrap_or(false);
     let mut pattern: Option<String> = config.as_ref().and_then(|c| c.pattern.clone());
+    let mut page_size = config
+        .as_ref()
+        .and_then(|c| c.page_size.as_deref())
+        .map(parse_page_size)
+        .unwrap_or(PageSize::Letter);
     let mut urls: Vec<String> = Vec::new();
     let mut file_input_used = false;
     let mut args = raw_args.into_iter();
@@ -55,6 +60,12 @@ fn main() {
                 std::process::exit(1);
             });
             delay_secs = parse_delay(&value);
+        } else if arg == "--page-size" {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("Error: --page-size requires a value (letter|rm2)");
+                std::process::exit(1);
+            });
+            page_size = parse_page_size(&value);
         } else if arg == "--summarize" {
             summarize = true;
         } else if arg == "--pattern" {
@@ -70,6 +81,8 @@ fn main() {
             input_file = Some(value.to_string());
         } else if let Some(value) = arg.strip_prefix("--delay=") {
             delay_secs = parse_delay(value);
+        } else if let Some(value) = arg.strip_prefix("--page-size=") {
+            page_size = parse_page_size(value);
         } else if let Some(value) = arg.strip_prefix("--pattern=") {
             pattern = Some(value.to_string());
             summarize = true;
@@ -104,7 +117,7 @@ fn main() {
 
     if urls.is_empty() {
         eprintln!(
-            "Usage: rmfeeder [--config <path>] [--output <file.pdf>] [--file <path>] [--delay N] [--summarize] [--pattern <name>] <url1> [url2] [url3] ..."
+            "Usage: rmfeeder [--config <path>] [--output <file.pdf>] [--file <path>] [--delay N] [--page-size <letter|rm2>] [--summarize] [--pattern <name>] <url1> [url2] [url3] ..."
         );
         std::process::exit(1);
     }
@@ -133,11 +146,12 @@ fn main() {
     if summarize {
         eprintln!("Pattern: {}", pattern);
     }
+    eprintln!("Page size: {}", page_size.as_str());
 
     // Single article
     if urls.len() == 1 {
         let url = &urls[0];
-        match process_url_to_pdf_with_options(url, &output_path, summarize, &pattern) {
+        match process_url_to_pdf_with_options(url, &output_path, summarize, &pattern, page_size) {
             Ok(_) => println!("Wrote {}", output_path),
             Err(e) => eprintln!("Error: {}", e),
         }
@@ -146,7 +160,14 @@ fn main() {
     }
 
     // Multi-article mode (TOC + article sections)
-    match multipdf::generate_multi_pdf(&urls, &output_path, delay_secs, summarize, &pattern) {
+    match multipdf::generate_multi_pdf(
+        &urls,
+        &output_path,
+        delay_secs,
+        summarize,
+        &pattern,
+        page_size,
+    ) {
         Ok(_) => println!("Wrote {}", output_path),
         Err(e) => eprintln!("Error: {}", e),
     }
@@ -188,6 +209,13 @@ fn determine_mode(file_input_used: bool, url_count: usize, summarize: bool) -> O
 fn parse_delay(value: &str) -> u64 {
     value.parse::<u64>().unwrap_or_else(|_| {
         eprintln!("Error: --delay must be a non-negative number");
+        std::process::exit(1);
+    })
+}
+
+fn parse_page_size(value: &str) -> PageSize {
+    PageSize::parse(value).unwrap_or_else(|| {
+        eprintln!("Error: --page-size must be one of: letter, rm2");
         std::process::exit(1);
     })
 }

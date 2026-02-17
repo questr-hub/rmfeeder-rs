@@ -24,6 +24,41 @@ pub struct AppConfig {
     pub yt_delay: Option<u64>,
     pub yt_cookies_browser: Option<String>,
     pub yt_mark_watched_on_success: Option<bool>,
+    pub page_size: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PageSize {
+    Letter,
+    Rm2,
+}
+
+impl PageSize {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "letter" => Some(Self::Letter),
+            "rm2" => Some(Self::Rm2),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Letter => "letter",
+            Self::Rm2 => "rm2",
+        }
+    }
+
+    pub fn css_size_value(self) -> &'static str {
+        match self {
+            Self::Letter => "letter",
+            Self::Rm2 => "157.8mm 210.4mm",
+        }
+    }
+
+    pub fn page_override_css(self) -> String {
+        format!("@page {{ size: {}; }}", self.css_size_value())
+    }
 }
 
 pub fn load_config() -> Result<Option<AppConfig>, Box<dyn std::error::Error>> {
@@ -73,7 +108,7 @@ pub fn process_url_to_pdf(
     url: &str,
     output_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    process_url_to_pdf_with_options(url, output_path, false, "summarize")
+    process_url_to_pdf_with_options(url, output_path, false, "summarize", PageSize::Letter)
 }
 
 pub fn process_url_to_pdf_with_options(
@@ -81,6 +116,7 @@ pub fn process_url_to_pdf_with_options(
     output_path: &str,
     summarize: bool,
     pattern: &str,
+    page_size: PageSize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let normalized = fetcher::normalize_url(url)?;
     let html = fetcher::fetch_html(&normalized)?;
@@ -91,7 +127,7 @@ pub fn process_url_to_pdf_with_options(
         } else {
             article.content.to_string()
         };
-        pdf::generate_pdf(&article.title, &body_html, output_path)
+        pdf::generate_pdf(&article.title, &body_html, output_path, page_size)
     } else {
         Err("Readability extraction failed".into())
     }
