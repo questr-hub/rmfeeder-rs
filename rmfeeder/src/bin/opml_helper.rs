@@ -5,10 +5,10 @@ use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use feed_rs::parser;
-use rmfeeder::{expand_tilde_path, load_config_from_path};
 use reqwest::blocking::Client;
+use rmfeeder::{expand_tilde_path, load_config_from_path};
 use roxmltree::Document;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 
 fn main() {
     let raw_args: Vec<String> = env::args().skip(1).collect();
@@ -66,17 +66,24 @@ fn main() {
         }
     }
 
-    let opml_path = opml_path.unwrap_or_else(|| {
-        eprintln!(
-            "Usage: rmfeeder-opml [--config <path>] [--limit N] [--output path] [--no-state] [--clear-state] <feeds.opml>"
-        );
-        std::process::exit(1);
-    });
-
     if !use_state && clear_state {
         eprintln!("Error: --no-state cannot be used with --clear-state");
         std::process::exit(1);
     }
+
+    if clear_state && opml_path.is_none() {
+        let _state = init_state_db(true, state_db_path.take());
+        println!("Cleared state DB");
+        return;
+    }
+
+    let opml_path = opml_path.unwrap_or_else(|| {
+        eprintln!(
+            "Usage: opml_helper [--config <path>] [--limit N] [--output path] [--no-state] [--clear-state] <feeds.opml>"
+        );
+        eprintln!("   or: opml_helper [--config <path>] [--clear-state]");
+        std::process::exit(1);
+    });
 
     let feed_urls = match load_opml_feed_urls(&opml_path) {
         Ok(urls) => urls,
@@ -204,7 +211,11 @@ fn init_state_db(clear_state: bool, custom_path: Option<String>) -> StateDb {
 
     if let Some(parent) = path.parent() {
         if let Err(e) = std::fs::create_dir_all(parent) {
-            eprintln!("Error: failed to create state directory {}: {}", parent.display(), e);
+            eprintln!(
+                "Error: failed to create state directory {}: {}",
+                parent.display(),
+                e
+            );
             std::process::exit(1);
         }
     }

@@ -181,7 +181,8 @@ State behavior (default is stateful):
 
 ```bash
 cargo run --bin opml_helper -- --no-state feeds.opml
-cargo run --bin opml_helper -- --clear-state feeds.opml
+cargo run --bin opml_helper -- --clear-state
+cargo run --bin yt_helper -- --clear-state
 ```
 
 Default state DB path:
