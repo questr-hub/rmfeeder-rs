@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs::write;
 use std::process::Command;
 
-use crate::{escape_html, temp_html_path};
+use crate::{escape_html, temp_html_path, PageSize};
 
 const BASE_CSS: &str = include_str!("../styles.css");
 
@@ -10,6 +10,7 @@ pub fn generate_pdf(
     title: &str,
     body_html: &str,
     output_path: &str,
+    page_size: PageSize,
 ) -> Result<(), Box<dyn Error>> {
 
     let tmp_html = temp_html_path("rmfeeder_tmp");
@@ -27,6 +28,7 @@ r#"<!DOCTYPE html>
 <title>{title}</title>
 <style>
 {base_css}
+{page_override_css}
 </style>
 </head>
 
@@ -34,9 +36,9 @@ r#"<!DOCTYPE html>
 
 <!-- ===== COVER PAGE ===== -->
 <section class="cover-page">
-  <div class="cover-title">{title}</div>
-  <div class="cover-subtitle">rmfeeder Article</div>
-  <div class="cover-date">{today}</div>
+  <h1 class="cover-title">{title}</h1>
+  <h2 class="cover-subtitle">rmfeeder Article</h2>
+  <p class="cover-date">{today}</p>
 </section>
 
 <!-- ===== ARTICLE CONTENT ===== -->
@@ -55,6 +57,7 @@ r#"<!DOCTYPE html>
 "#,
         title = safe_title,
         base_css = BASE_CSS,
+        page_override_css = page_size.page_override_css(),
         today = today,
         body = body_html
     );

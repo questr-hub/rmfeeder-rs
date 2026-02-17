@@ -4,7 +4,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
-use crate::{escape_html, extractor, fetcher, summarize_html, temp_html_path};
+use crate::{escape_html, extractor, fetcher, summarize_html, temp_html_path, PageSize};
 use reqwest::StatusCode;
 
 const BASE_CSS: &str = include_str!("../styles.css");
@@ -15,6 +15,7 @@ pub fn generate_multi_pdf(
     delay_secs: u64,
     summarize: bool,
     pattern: &str,
+    page_size: PageSize,
 ) -> Result<(), Box<dyn Error>> {
     let mut articles: Vec<(String, String)> = Vec::new();
 
@@ -77,6 +78,7 @@ pub fn generate_multi_pdf(
         output_path,
         "rmfeeder ::<br>Reading Bundle",
         "Collected Articles",
+        page_size,
     )
 }
 
@@ -85,6 +87,7 @@ pub fn generate_pdf_bundle(
     output_path: &str,
     cover_title: &str,
     cover_subtitle: &str,
+    page_size: PageSize,
 ) -> Result<(), Box<dyn Error>> {
     if articles.is_empty() {
         return Err("No articles fetched".into());
@@ -154,6 +157,7 @@ pub fn generate_pdf_bundle(
 <title>rmfeeder – Multi Article</title>
 <style>
 {base_css}
+{page_override_css}
 </style>
 </head>
 <body>
@@ -164,6 +168,7 @@ pub fn generate_pdf_bundle(
 </body>
 </html>",
         base_css = BASE_CSS,
+        page_override_css = page_size.page_override_css(),
         cover = cover_html,
         toc = toc_html,
         articles = article_blocks
