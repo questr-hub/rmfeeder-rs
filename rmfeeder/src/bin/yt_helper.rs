@@ -195,7 +195,10 @@ fn main() {
             match db.should_emit(&state_key) {
                 Ok(false) => {
                     skipped += 1;
-                    eprintln!("Skipping {}: already seen", video.url);
+                    eprintln!(
+                        "already seen, skipping item: {} [source=yt-watchlist]",
+                        video.url
+                    );
                     continue;
                 }
                 Ok(true) => {}

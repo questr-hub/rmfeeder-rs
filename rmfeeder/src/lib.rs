@@ -1,9 +1,12 @@
-pub mod extractor;
-pub mod fetcher;
 pub mod epub;
+pub mod extractor;
+pub mod feeds;
+pub mod fetcher;
+pub mod multipdf;
 pub mod pdf;
-pub mod xhtml;      // ← ADD THIS
-pub mod multipdf;   // ← ALSO ADD THIS
+pub mod state;
+pub mod xhtml;
+pub mod youtube;
 
 use serde::Deserialize;
 use std::io::ErrorKind;
@@ -135,10 +138,7 @@ pub fn process_url(url: &str) -> String {
     }
 }
 
-pub fn process_url_to_pdf(
-    url: &str,
-    output_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn process_url_to_pdf(url: &str, output_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     process_url_to_pdf_with_options(url, output_path, false, "summarize", PageSize::Letter)
 }
 
@@ -207,7 +207,7 @@ pub fn summarize_html(
 }
 
 fn markdown_to_html(input: &str) -> String {
-    use pulldown_cmark::{html, Options, Parser};
+    use pulldown_cmark::{Options, Parser, html};
 
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
