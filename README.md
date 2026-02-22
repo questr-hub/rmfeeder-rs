@@ -153,15 +153,15 @@ Page size can be selected per-run:
 
 ```bash
 cargo run --bin rmfeeder -- --page-size rm1 --file urls.txt
-cargo run --bin rmfeeder -- --yt-watchlist --page-size rpp
+cargo run --bin rmfeeder -- --yt-watchlist --page-size rmpp
 ```
 
 Supported values:
 - `letter` (default)
 - `rm1` (reMarkable 1)
 - `rm2`
-- `rpp` (reMarkable Paper Pro)
-- `rpp-move` (reMarkable Paper Pro Move)
+- `rmpp` (reMarkable Paper Pro)
+- `rmpp-move` (reMarkable Paper Pro Move)
 
 ### **Default Output Filenames**
 

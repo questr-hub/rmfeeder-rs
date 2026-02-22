@@ -40,16 +40,22 @@ pub enum PageSize {
 }
 
 impl PageSize {
-    pub const VALUE_HINT: &'static str = "letter|rm1|rm2|rpp|rpp-move";
-    pub const VALUE_LIST: &'static str = "letter, rm1, rm2, rpp, rpp-move";
+    pub const VALUE_HINT: &'static str = "letter|rm1|rm2|rmpp|rmpp-move";
+    pub const VALUE_LIST: &'static str = "letter, rm1, rm2, rmpp, rmpp-move";
 
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "letter" => Some(Self::Letter),
             "rm1" | "remarkable1" | "remarkable-1" => Some(Self::Rm1),
             "rm2" => Some(Self::Rm2),
-            "rpp" | "paperpro" | "paper-pro" | "remarkable-paper-pro" => Some(Self::Rpp),
-            "rpp-move" | "paperpro-move" | "paper-pro-move" | "remarkable-paper-pro-move" => {
+            "rmpp" | "rpp" | "paperpro" | "paper-pro" | "remarkable-paper-pro" => {
+                Some(Self::Rpp)
+            }
+            "rmpp-move"
+            | "rpp-move"
+            | "paperpro-move"
+            | "paper-pro-move"
+            | "remarkable-paper-pro-move" => {
                 Some(Self::RppMove)
             }
             _ => None,
@@ -61,8 +67,8 @@ impl PageSize {
             Self::Letter => "letter",
             Self::Rm1 => "rm1",
             Self::Rm2 => "rm2",
-            Self::Rpp => "rpp",
-            Self::RppMove => "rpp-move",
+            Self::Rpp => "rmpp",
+            Self::RppMove => "rmpp-move",
         }
     }
 
@@ -88,6 +94,8 @@ mod tests {
     #[test]
     fn parses_new_page_size_values() {
         assert_eq!(PageSize::parse("rm1"), Some(PageSize::Rm1));
+        assert_eq!(PageSize::parse("rmpp"), Some(PageSize::Rpp));
+        assert_eq!(PageSize::parse("rmpp-move"), Some(PageSize::RppMove));
         assert_eq!(PageSize::parse("rpp"), Some(PageSize::Rpp));
         assert_eq!(PageSize::parse("rpp-move"), Some(PageSize::RppMove));
         assert_eq!(
