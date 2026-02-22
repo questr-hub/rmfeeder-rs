@@ -7,7 +7,9 @@ use std::time::Duration;
 
 use chrono::Local;
 use pulldown_cmark::{Options, Parser, html};
-use rmfeeder::{PageSize, escape_html, expand_tilde_path, load_config_from_path, multipdf};
+use rmfeeder::{
+    PageSize, default_config_path, escape_html, expand_tilde_path, load_config_from_path, multipdf,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Deserialize;
 
@@ -15,7 +17,8 @@ const WATCH_LATER_URL: &str = "https://www.youtube.com/playlist?list=WL";
 
 fn main() {
     let raw_args: Vec<String> = env::args().skip(1).collect();
-    let config_path = extract_config_path(&raw_args).unwrap_or_else(|| "rmfeeder.toml".to_string());
+    let config_path = extract_config_path(&raw_args)
+        .unwrap_or_else(|| default_config_path().to_string_lossy().to_string());
     let config = match load_config_from_path(&config_path) {
         Ok(cfg) => cfg,
         Err(e) => {

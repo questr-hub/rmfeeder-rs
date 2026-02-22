@@ -115,11 +115,16 @@ This crate provides three binaries:
 ### **Configuration**
 
 If a `rmfeeder.toml` file is present, its values become defaults (CLI flags override).
-By default, the app looks for `rmfeeder.toml` in the current working directory unless `--config` is passed.
+By default, the app looks for config in:
+- `$XDG_CONFIG_HOME/rmfeeder/rmfeeder.toml` (when `XDG_CONFIG_HOME` is set)
+- otherwise `~/.config/rmfeeder/rmfeeder.toml`
+
+If neither environment path is available, it falls back to `rmfeeder.toml` in the current working directory.
+Use `--config` to override the path explicitly.
 
 ```toml
 state_db_path = "~/.local/share/rmfeeder/rmfeeder_state.sqlite"
-feeds_opml_path = "feeds.opml"
+feeds_opml_path = "~/.config/rmfeeder/feeds.opml"
 urls_path = "urls.txt"
 output_dir = "output"
 page_size = "letter"
@@ -169,6 +174,12 @@ Generate a URL list from an OPML file (default 3 per feed), then feed it into rm
 ```bash
 cargo run --bin opml_helper -- --limit 3 --output urls.txt feeds.opml
 cargo run --bin rmfeeder -- --file urls.txt
+```
+
+If no OPML path is provided via CLI or config, `opml_helper` uses:
+
+```text
+~/.config/rmfeeder/feeds.opml
 ```
 
 Write URLs to stdout (no `--output`):

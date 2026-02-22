@@ -6,13 +6,16 @@ use std::path::{Path, PathBuf};
 
 use feed_rs::parser;
 use reqwest::blocking::Client;
-use rmfeeder::{expand_tilde_path, load_config_from_path};
+use rmfeeder::{
+    default_config_path, default_feeds_opml_path, expand_tilde_path, load_config_from_path,
+};
 use roxmltree::Document;
 use rusqlite::{Connection, OptionalExtension, params};
 
 fn main() {
     let raw_args: Vec<String> = env::args().skip(1).collect();
-    let config_path = extract_config_path(&raw_args).unwrap_or_else(|| "rmfeeder.toml".to_string());
+    let config_path = extract_config_path(&raw_args)
+        .unwrap_or_else(|| default_config_path().to_string_lossy().to_string());
 
     let config = match load_config_from_path(&config_path) {
         Ok(cfg) => cfg,
@@ -77,13 +80,8 @@ fn main() {
         return;
     }
 
-    let opml_path = opml_path.unwrap_or_else(|| {
-        eprintln!(
-            "Usage: opml_helper [--config <path>] [--limit N] [--output path] [--no-state] [--clear-state] <feeds.opml>"
-        );
-        eprintln!("   or: opml_helper [--config <path>] [--clear-state]");
-        std::process::exit(1);
-    });
+    let opml_path = opml_path
+        .unwrap_or_else(|| default_feeds_opml_path().to_string_lossy().to_string());
 
     let feed_urls = match load_opml_feed_urls(&opml_path) {
         Ok(urls) => urls,

@@ -2,14 +2,15 @@ use std::env;
 
 use chrono::Local;
 use rmfeeder::multipdf;
-use rmfeeder::{load_config_from_path, process_url_to_pdf_with_options, PageSize};
+use rmfeeder::{default_config_path, load_config_from_path, process_url_to_pdf_with_options, PageSize};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 fn main() {
     let raw_args: Vec<String> = env::args().skip(1).collect();
-    let config_path = extract_config_path(&raw_args).unwrap_or_else(|| "rmfeeder.toml".to_string());
+    let config_path = extract_config_path(&raw_args)
+        .unwrap_or_else(|| default_config_path().to_string_lossy().to_string());
 
     let config = match load_config_from_path(&config_path) {
         Ok(cfg) => cfg,

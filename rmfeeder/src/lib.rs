@@ -62,7 +62,8 @@ impl PageSize {
 }
 
 pub fn load_config() -> Result<Option<AppConfig>, Box<dyn std::error::Error>> {
-    load_config_from_path("rmfeeder.toml")
+    let path = default_config_path();
+    load_config_from_path(path.to_string_lossy().as_ref())
 }
 
 pub fn load_config_from_path(path: &str) -> Result<Option<AppConfig>, Box<dyn std::error::Error>> {
@@ -75,6 +76,36 @@ pub fn load_config_from_path(path: &str) -> Result<Option<AppConfig>, Box<dyn st
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),
     }
+}
+
+pub fn default_config_path() -> PathBuf {
+    if let Some(dir) = default_config_dir() {
+        return dir.join("rmfeeder.toml");
+    }
+
+    PathBuf::from("rmfeeder.toml")
+}
+
+pub fn default_feeds_opml_path() -> PathBuf {
+    if let Some(dir) = default_config_dir() {
+        return dir.join("feeds.opml");
+    }
+
+    PathBuf::from("feeds.opml")
+}
+
+pub fn default_config_dir() -> Option<PathBuf> {
+    if let Ok(xdg_config_home) = std::env::var("XDG_CONFIG_HOME") {
+        if !xdg_config_home.trim().is_empty() {
+            return Some(Path::new(&xdg_config_home).join("rmfeeder"));
+        }
+    }
+
+    if let Ok(home) = std::env::var("HOME") {
+        return Some(Path::new(&home).join(".config").join("rmfeeder"));
+    }
+
+    None
 }
 
 pub fn expand_tilde_path(path: &str) -> PathBuf {
