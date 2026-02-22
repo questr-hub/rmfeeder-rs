@@ -1,21 +1,72 @@
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 use feed_rs::parser;
 use reqwest::blocking::Client;
-use roxmltree::Document;
+use roxmltree::{Document, Node};
+
+#[derive(Debug, Clone)]
+pub struct FeedSource {
+    pub feed_url: String,
+    pub section: Option<String>,
+}
 
 pub fn load_opml_feed_urls(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    Ok(load_opml_feed_sources(path)?
+        .into_iter()
+        .map(|source| source.feed_url)
+        .collect())
+}
+
+pub fn load_opml_feed_sources(path: &str) -> Result<Vec<FeedSource>, Box<dyn std::error::Error>> {
     let content = std::fs::read_to_string(path)?;
     let doc = Document::parse(&content)?;
-    let mut urls = BTreeSet::new();
 
-    for node in doc.descendants().filter(|n| n.has_tag_name("outline")) {
-        if let Some(url) = node.attribute("xmlUrl") {
-            urls.insert(url.to_string());
+    let mut seen_feed_urls = HashSet::new();
+    let mut sources = Vec::new();
+
+    let root = doc.root_element();
+    collect_sources(root, None, &mut seen_feed_urls, &mut sources);
+
+    Ok(sources)
+}
+
+fn collect_sources(
+    node: Node<'_, '_>,
+    current_section: Option<&str>,
+    seen_feed_urls: &mut HashSet<String>,
+    sources: &mut Vec<FeedSource>,
+) {
+    if !node.has_tag_name("outline") {
+        for child in node.children().filter(|child| child.is_element()) {
+            collect_sources(child, current_section, seen_feed_urls, sources);
+        }
+        return;
+    }
+
+    let section_label = node
+        .attribute("title")
+        .or_else(|| node.attribute("text"))
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if let Some(feed_url) = node.attribute("xmlUrl").map(str::trim) {
+        if !feed_url.is_empty() && seen_feed_urls.insert(feed_url.to_string()) {
+            sources.push(FeedSource {
+                feed_url: feed_url.to_string(),
+                section: current_section.map(ToString::to_string),
+            });
         }
     }
 
-    Ok(urls.into_iter().collect())
+    let next_section = if node.attribute("xmlUrl").is_some() {
+        current_section
+    } else {
+        section_label.or(current_section)
+    };
+
+    for child in node.children().filter(|child| child.is_element()) {
+        collect_sources(child, next_section, seen_feed_urls, sources);
+    }
 }
 
 pub fn fetch_feed_links(

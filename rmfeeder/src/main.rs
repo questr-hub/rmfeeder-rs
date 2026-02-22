@@ -19,6 +19,7 @@ struct UrlCandidate {
     url: String,
     source: &'static str,
     use_seen_state: bool,
+    toc_section: Option<String>,
 }
 
 fn main() {
@@ -216,6 +217,7 @@ fn main() {
             url: url.clone(),
             source: "arg",
             use_seen_state: false,
+            toc_section: None,
         })
         .collect();
 
@@ -239,6 +241,7 @@ fn main() {
                 url: trimmed.to_string(),
                 source: "file",
                 use_seen_state: false,
+                toc_section: None,
             });
         }
     }
@@ -298,7 +301,7 @@ fn main() {
         render_output_path(prefix, output_dir.take())
     });
 
-    let mut articles: Vec<(String, String)> = Vec::new();
+    let mut articles: Vec<multipdf::BundleArticle> = Vec::new();
     let mut attempted = 0usize;
     let mut included = 0usize;
     let mut skipped = 0usize;
@@ -322,7 +325,7 @@ fn main() {
         let opml_path =
             opml_path.unwrap_or_else(|| default_feeds_opml_path().to_string_lossy().to_string());
 
-        let feed_urls = match feeds::load_opml_feed_urls(&opml_path) {
+        let feed_sources = match feeds::load_opml_feed_sources(&opml_path) {
             Ok(urls) => urls,
             Err(e) => {
                 eprintln!("Error: failed to parse OPML {}: {}", opml_path, e);
@@ -330,7 +333,7 @@ fn main() {
             }
         };
 
-        if feed_urls.is_empty() {
+        if feed_sources.is_empty() {
             eprintln!("Warning: no feed URLs found in {}", opml_path);
         } else {
             let client = Client::builder()
@@ -341,19 +344,20 @@ fn main() {
                     std::process::exit(1);
                 });
 
-            for feed_url in feed_urls {
-                match feeds::fetch_feed_links(&client, &feed_url, feeds_limit) {
+            for feed_source in feed_sources {
+                match feeds::fetch_feed_links(&client, &feed_source.feed_url, feeds_limit) {
                     Ok(links) => {
                         for link in links {
                             url_candidates.push(UrlCandidate {
                                 url: link,
                                 source: "feeds",
                                 use_seen_state: true,
+                                toc_section: feed_source.section.clone(),
                             });
                         }
                     }
                     Err(e) => {
-                        eprintln!("Warning: {}: {}", feed_url, e);
+                        eprintln!("Warning: {}: {}", feed_source.feed_url, e);
                     }
                 }
             }
@@ -436,7 +440,11 @@ fn main() {
             article.content.to_string()
         };
 
-        articles.push((title, content_html));
+        articles.push(multipdf::BundleArticle {
+            section: candidate.toc_section.clone(),
+            title,
+            content_html,
+        });
         included += 1;
 
         if candidate.use_seen_state {
@@ -501,7 +509,11 @@ fn main() {
                 }
             };
 
-            articles.push((video.title, body_html));
+            articles.push(multipdf::BundleArticle {
+                section: Some("YouTube Watchlist".to_string()),
+                title: video.title,
+                content_html: body_html,
+            });
             included += 1;
             yt_included += 1;
 
@@ -541,7 +553,7 @@ fn main() {
     }
     eprintln!("Page size: {}", page_size.as_str());
 
-    match multipdf::generate_pdf_bundle(
+    match multipdf::generate_pdf_bundle_with_sections(
         &articles,
         &output_path,
         "rmfeeder ::<br>Reading Bundle",

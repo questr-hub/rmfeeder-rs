@@ -4,10 +4,17 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
-use crate::{escape_html, extractor, fetcher, summarize_html, temp_html_path, PageSize};
+use crate::{PageSize, escape_html, extractor, fetcher, summarize_html, temp_html_path};
 use reqwest::StatusCode;
 
 const BASE_CSS: &str = include_str!("../styles.css");
+
+#[derive(Debug, Clone)]
+pub struct BundleArticle {
+    pub section: Option<String>,
+    pub title: String,
+    pub content_html: String,
+}
 
 pub fn generate_multi_pdf(
     urls: &[String],
@@ -17,7 +24,7 @@ pub fn generate_multi_pdf(
     pattern: &str,
     page_size: PageSize,
 ) -> Result<(), Box<dyn Error>> {
-    let mut articles: Vec<(String, String)> = Vec::new();
+    let mut articles: Vec<BundleArticle> = Vec::new();
 
     // -------- Fetch + extract articles --------
     for url in urls {
@@ -66,14 +73,18 @@ pub fn generate_multi_pdf(
         } else {
             article.content.to_string()
         };
-        articles.push((title, content_html));
+        articles.push(BundleArticle {
+            section: None,
+            title,
+            content_html,
+        });
 
         if delay_secs > 0 {
             thread::sleep(Duration::from_secs(delay_secs));
         }
     }
 
-    generate_pdf_bundle(
+    generate_pdf_bundle_with_sections(
         &articles,
         output_path,
         "rmfeeder ::<br>Reading Bundle",
@@ -84,6 +95,24 @@ pub fn generate_multi_pdf(
 
 pub fn generate_pdf_bundle(
     articles: &[(String, String)],
+    output_path: &str,
+    cover_title: &str,
+    cover_subtitle: &str,
+    page_size: PageSize,
+) -> Result<(), Box<dyn Error>> {
+    let mapped: Vec<BundleArticle> = articles
+        .iter()
+        .map(|(title, content_html)| BundleArticle {
+            section: None,
+            title: title.clone(),
+            content_html: content_html.clone(),
+        })
+        .collect();
+    generate_pdf_bundle_with_sections(&mapped, output_path, cover_title, cover_subtitle, page_size)
+}
+
+pub fn generate_pdf_bundle_with_sections(
+    articles: &[BundleArticle],
     output_path: &str,
     cover_title: &str,
     cover_subtitle: &str,
@@ -111,9 +140,23 @@ pub fn generate_pdf_bundle(
 
     // -------- Build TOC --------
     let mut toc_items = String::new();
-    for (idx, (title, _)) in articles.iter().enumerate() {
+    let mut last_section: Option<&str> = None;
+    for (idx, article) in articles.iter().enumerate() {
         let id = format!("article-{}", idx + 1);
-        let safe_title = escape_html(title);
+        let safe_title = escape_html(&article.title);
+        let current_section = article.section.as_deref();
+
+        if current_section != last_section {
+            if let Some(section) = current_section {
+                let safe_section = escape_html(section);
+                toc_items.push_str(&format!(
+                    "<li class=\"toc-section\">{}</li>\n",
+                    safe_section
+                ));
+            }
+            last_section = current_section;
+        }
+
         toc_items.push_str(&format!(
             "<li><a href=\"#{}\">{}</a></li>\n",
             id, safe_title
@@ -132,9 +175,9 @@ pub fn generate_pdf_bundle(
 
     // -------- Build Article Blocks --------
     let mut article_blocks = String::new();
-    for (idx, (title, content_html)) in articles.iter().enumerate() {
+    for (idx, article) in articles.iter().enumerate() {
         let id = format!("article-{}", idx + 1);
-        let safe_title = escape_html(title);
+        let safe_title = escape_html(&article.title);
 
         article_blocks.push_str(&format!(
             "<section id=\"{id}\" class=\"article-block\">
@@ -144,7 +187,7 @@ pub fn generate_pdf_bundle(
             </section>\n",
             id = id,
             title = safe_title,
-            body = content_html
+            body = article.content_html
         ));
     }
 
