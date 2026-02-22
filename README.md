@@ -18,12 +18,12 @@ All workflows render through the same PDF engine and styling system (cover page,
 - Optional summary mode with `fabric-ai` (`--summarize`, `--pattern`)
 
 ### ✔ Feed Workflow (OPML + State)
-- `opml_helper` extracts recent article URLs from feeds in an OPML file
+- `rmfeeder --feeds` extracts recent article URLs from feeds in an OPML file
 - Local SQLite state avoids re-processing already-seen entries
-- Supports stateless runs (`--no-state`) and state reset (`--clear-state`)
+- Supports state reset (`--clear-state`)
 
 ### ✔ YouTube Watch Later Workflow
-- `yt_helper` reads Watch Later via `yt-dlp`
+- `rmfeeder --yt-watchlist` reads Watch Later via `yt-dlp`
 - Summarizes videos with `fabric-ai` patterns (default `youtube_summary`)
 - Builds a single reading bundle PDF from summaries
 - Local SQLite state dedupes already-processed videos
@@ -57,7 +57,7 @@ All workflows render through the same PDF engine and styling system (cover page,
 `fabric-ai` is not required to compile `rmfeeder`, but it is required for:
 
 - `rmfeeder --summarize`
-- `yt_helper` (YouTube Watch Later summaries)
+- `rmfeeder --yt-watchlist` (YouTube Watch Later summaries)
 
 Install with Homebrew:
 
@@ -77,7 +77,7 @@ If `fabric-ai` is missing, summary commands will fail at runtime with a process/
 
 `yt-dlp` is not required to compile `rmfeeder`, but it is required for:
 
-- `yt_helper --watch-later`
+- `rmfeeder --yt-watchlist`
 
 Install with Homebrew:
 
@@ -106,11 +106,14 @@ cargo build --release
 
 ## 🚀 Usage
 
-This crate provides three binaries:
+Primary entrypoint:
 
-- `rmfeeder` (fetch URLs and generate PDF)
-- `opml_helper` (read feeds OPML and emit article URLs)
-- `yt_helper` (read YouTube Watch Later, summarize, and build PDF bundle)
+- `rmfeeder` (unified URL/file/feeds/YouTube bundle generation)
+
+Compatibility helpers are still available:
+
+- `opml_helper`
+- `yt_helper`
 
 ### **Configuration**
 
@@ -132,20 +135,25 @@ limit = 3
 delay = 2
 summarize = true
 pattern = "summarize"
+yt_limit = 10
+yt_pattern = "youtube_summary"
+yt_delay = 0
+yt_cookies_browser = "chrome"
+yt_mark_watched_on_success = true
 ```
 
 Use a different config path:
 
 ```bash
 cargo run --bin rmfeeder -- --config ~/.config/rmfeeder/custom.toml --file urls.txt
-cargo run --bin opml_helper -- --config ~/.config/rmfeeder/custom.toml --limit 5 feeds.opml
+cargo run --bin rmfeeder -- --config ~/.config/rmfeeder/custom.toml --feeds --limit 5
 ```
 
 Page size can be selected per-run:
 
 ```bash
 cargo run --bin rmfeeder -- --page-size rm2 --file urls.txt
-cargo run --bin yt_helper -- --watch-later --page-size rm2
+cargo run --bin rmfeeder -- --yt-watchlist --page-size rm2
 ```
 
 Supported values:
@@ -160,102 +168,54 @@ If `--output` is not provided, filenames are mode-based and timestamped:
 - `rmfeeder` single URL + `--summarize`: `single-summary-YYYY-MM-DD-HH-MM-SS.pdf`
 - `rmfeeder` bundle (multiple URLs or any `--file`): `bundle-YYYY-MM-DD-HH-MM-SS.pdf`
 - `rmfeeder` bundle + `--summarize`: `bundle-summary-YYYY-MM-DD-HH-MM-SS.pdf`
-- `yt_helper` watch later: `yt-watchlist-YYYY-MM-DD-HH-MM-SS.pdf`
+- `rmfeeder` with `--yt-watchlist`: `bundle-summary-YYYY-MM-DD-HH-MM-SS.pdf`
+- `yt_helper` watch later (legacy helper): `yt-watchlist-YYYY-MM-DD-HH-MM-SS.pdf`
 
 `--output` always overrides default naming.
 
-### **OPML Helper**
+### **Unified Source Selection**
 
-Current version note: OPML is a two-step workflow.
-There is no `rmfeeder --opml` flag yet.
-
-Generate a URL list from an OPML file (default 3 per feed), then feed it into rmfeeder:
+Use one command to combine sources:
 
 ```bash
-cargo run --bin opml_helper -- --limit 3 --output urls.txt feeds.opml
+# Direct URLs
+cargo run --bin rmfeeder -- "https://example.com/a" "https://example.com/b"
+
+# URLs from file
 cargo run --bin rmfeeder -- --file urls.txt
+
+# OPML feeds (defaults to ~/.config/rmfeeder/feeds.opml)
+cargo run --bin rmfeeder -- --feeds
+
+# YouTube Watch Later summaries
+cargo run --bin rmfeeder -- --yt-watchlist
+
+# Combined run (feeds + YouTube + direct URL)
+cargo run --bin rmfeeder -- --feeds --yt-watchlist "https://example.com/c"
 ```
 
-If no OPML path is provided via CLI or config, `opml_helper` uses:
+Source selectors are additive:
 
-```text
-~/.config/rmfeeder/feeds.opml
-```
+- `--feeds`
+- `--feeds-file <feeds.opml>`
+- `--yt-watchlist`
+- `--file <path>`
+- direct URL args (`<url1> [url2] ...`)
 
-Write URLs to stdout (no `--output`):
+Source-specific options:
 
-```bash
-cargo run --bin opml_helper -- --limit 5 feeds.opml
-```
+- `--limit N` sets both feeds and YouTube limits together
+- `--yt-limit N` overrides only YouTube limit
+- `--yt-pattern <name>` sets YouTube summary pattern (default `youtube_summary`)
+- `--cookies-from-browser <name>` selects browser/profile for YouTube auth
+- `--no-mark-watched` disables YouTube mark-watched side effects
 
-State behavior (default is stateful):
+State behavior:
 
-```bash
-cargo run --bin opml_helper -- --no-state feeds.opml
-cargo run --bin opml_helper -- --clear-state
-cargo run --bin yt_helper -- --clear-state
-```
-
-Default state DB path:
-
-```text
-~/.local/share/rmfeeder/rmfeeder_state.sqlite
-```
-
-### **YouTube Helper**
-
-`yt_helper` requires `fabric-ai` to generate summaries.
-
-Build a Watch Later summary bundle PDF:
-
-```bash
-cargo run --bin yt_helper -- --watch-later
-```
-
-Default output filename:
-
-```text
-yt-watchlist-YYYY-MM-DD-HH-MM-SS.pdf
-```
-
-Common options:
-
-```bash
-cargo run --bin yt_helper -- --watch-later --output yt-bundle.pdf --limit 8 --pattern youtube_summary --delay 2
-```
-
-`--limit` is the number of videos included in the PDF (after local-state skips/failures).
-
-Cookie profile behavior:
-
-- By default, `yt_helper` uses `--cookies-from-browser chrome`, which means Chrome's default profile.
-- If your YouTube account is in a different Chrome profile, pass it explicitly:
-
-```bash
-cargo run --bin yt_helper -- --watch-later --cookies-from-browser "chrome:Profile 4"
-```
-
-- You can also set this in `rmfeeder.toml`:
-
-```toml
-yt_cookies_browser = "chrome:Profile 4"
-```
-
-Dry-run mode still generates the PDF, but does not update local state or YouTube watched status:
-
-```bash
-cargo run --bin yt_helper -- --watch-later --dry-run
-```
-
-Expected YouTube workflow:
-
-- `yt_helper` does not filter by YouTube watched state when reading Watch Later.
-- `yt_helper` uses local SQLite state (`~/.local/share/rmfeeder/rmfeeder_state.sqlite`) as the source of truth for "already processed".
-- Marking watched is a YouTube side effect only; videos may still remain in Watch Later until you remove them in YouTube's web/app UI.
-- Typical flow:
-  - run `yt_helper` to generate reading bundles
-  - keep items in Watch Later while deciding whether to watch full videos
-  - manually remove watched items in YouTube when done
+- `--clear-state` resets `~/.local/share/rmfeeder/rmfeeder_state.sqlite`
+- seen-item skips log as `already seen, skipping item: ...`
+- feed items retain OPML section grouping in the TOC
+- YouTube items are grouped under `YouTube Watchlist`
 
 ### **Single Article**
 

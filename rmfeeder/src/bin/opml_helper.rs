@@ -80,8 +80,8 @@ fn main() {
         return;
     }
 
-    let opml_path = opml_path
-        .unwrap_or_else(|| default_feeds_opml_path().to_string_lossy().to_string());
+    let opml_path =
+        opml_path.unwrap_or_else(|| default_feeds_opml_path().to_string_lossy().to_string());
 
     let feed_urls = match load_opml_feed_urls(&opml_path) {
         Ok(urls) => urls,
@@ -128,7 +128,10 @@ fn main() {
                     if let Some(ref mut db) = state {
                         match db.should_emit(&link) {
                             Ok(true) => {}
-                            Ok(false) => continue,
+                            Ok(false) => {
+                                eprintln!("already seen, skipping item: {} [source=feeds]", link);
+                                continue;
+                            }
                             Err(e) => {
                                 eprintln!("Warning: state check failed: {}", e);
                             }
