@@ -109,3 +109,51 @@ fn pick_entry_link(entry: &feed_rs::model::Entry) -> Option<String> {
     }
     entry.links.first().map(|l| l.href.clone())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::load_opml_feed_sources;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_path(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!("rmfeeder-{name}-{nanos}.opml"))
+    }
+
+    #[test]
+    fn parses_sections_and_dedupes_feed_urls() {
+        let opml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <body>
+    <outline text="Tech">
+      <outline text="Feed A" xmlUrl="https://example.com/a.xml"/>
+      <outline text="Nested">
+        <outline text="Feed B" xmlUrl="https://example.com/b.xml"/>
+      </outline>
+    </outline>
+    <outline text="Duplicate" xmlUrl="https://example.com/a.xml"/>
+    <outline text="No Section Feed" xmlUrl="https://example.com/c.xml"/>
+  </body>
+</opml>"#;
+
+        let path = temp_path("sources");
+        std::fs::write(&path, opml).expect("write OPML fixture");
+
+        let sources = load_opml_feed_sources(path.to_str().expect("utf8 path"))
+            .expect("parse OPML sources");
+
+        std::fs::remove_file(&path).ok();
+
+        assert_eq!(sources.len(), 3);
+        assert_eq!(sources[0].feed_url, "https://example.com/a.xml");
+        assert_eq!(sources[0].section.as_deref(), Some("Tech"));
+        assert_eq!(sources[1].feed_url, "https://example.com/b.xml");
+        assert_eq!(sources[1].section.as_deref(), Some("Nested"));
+        assert_eq!(sources[2].feed_url, "https://example.com/c.xml");
+        assert_eq!(sources[2].section, None);
+    }
+}

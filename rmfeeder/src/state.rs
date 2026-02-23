@@ -77,3 +77,58 @@ pub fn default_state_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
         .join("rmfeeder")
         .join("rmfeeder_state.sqlite"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::init_state_db;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_db_path(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!("rmfeeder-state-{name}-{nanos}.sqlite"))
+    }
+
+    #[test]
+    fn state_marks_and_skips_seen_keys() {
+        let path = temp_db_path("mark-skip");
+        let path_str = path.to_string_lossy().to_string();
+
+        let mut state = init_state_db(false, Some(path_str.clone())).expect("init state");
+        assert!(state.should_emit("https://example.com/a").expect("query state"));
+        state.mark_seen("https://example.com/a").expect("mark seen");
+        assert!(!state.should_emit("https://example.com/a").expect("query state"));
+
+        let mut reopened = init_state_db(false, Some(path_str)).expect("reopen state");
+        assert!(
+            !reopened
+                .should_emit("https://example.com/a")
+                .expect("query persisted state")
+        );
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn clear_state_removes_existing_seen_entries() {
+        let path = temp_db_path("clear");
+        let path_str = path.to_string_lossy().to_string();
+
+        let mut state = init_state_db(false, Some(path_str.clone())).expect("init state");
+        state.mark_seen("yt::https://youtube.com/watch?v=abc")
+            .expect("mark seen");
+        drop(state);
+
+        let mut cleared = init_state_db(true, Some(path_str)).expect("clear state");
+        assert!(
+            cleared
+                .should_emit("yt::https://youtube.com/watch?v=abc")
+                .expect("query cleared state")
+        );
+
+        std::fs::remove_file(path).ok();
+    }
+}

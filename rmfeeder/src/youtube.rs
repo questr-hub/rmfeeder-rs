@@ -136,3 +136,51 @@ fn markdown_to_html(input: &str) -> String {
     html::push_html(&mut out, parser);
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{YtEntry, markdown_to_html, resolve_video_url};
+
+    #[test]
+    fn resolves_video_url_in_priority_order() {
+        let entry = YtEntry {
+            title: Some("One".to_string()),
+            webpage_url: Some("https://youtube.com/watch?v=web".to_string()),
+            url: Some("vid".to_string()),
+            id: Some("id".to_string()),
+        };
+        assert_eq!(
+            resolve_video_url(&entry).as_deref(),
+            Some("https://youtube.com/watch?v=web")
+        );
+
+        let entry = YtEntry {
+            title: None,
+            webpage_url: None,
+            url: Some("abc123".to_string()),
+            id: None,
+        };
+        assert_eq!(
+            resolve_video_url(&entry).as_deref(),
+            Some("https://www.youtube.com/watch?v=abc123")
+        );
+
+        let entry = YtEntry {
+            title: None,
+            webpage_url: None,
+            url: None,
+            id: Some("id456".to_string()),
+        };
+        assert_eq!(
+            resolve_video_url(&entry).as_deref(),
+            Some("https://www.youtube.com/watch?v=id456")
+        );
+    }
+
+    #[test]
+    fn markdown_conversion_emits_expected_html() {
+        let html = markdown_to_html("## Title\n\n- item");
+        assert!(html.contains("<h2>Title</h2>"));
+        assert!(html.contains("<li>item</li>"));
+    }
+}
