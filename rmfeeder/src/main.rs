@@ -110,7 +110,10 @@ fn main() {
             delay_secs = parse_delay(&value);
         } else if arg == "--page-size" {
             let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --page-size requires a value (letter|rm2)");
+                eprintln!(
+                    "Error: --page-size requires a value ({})",
+                    PageSize::VALUE_HINT
+                );
                 std::process::exit(1);
             });
             page_size = parse_page_size(&value);
@@ -603,14 +606,15 @@ fn parse_limit(value: &str) -> usize {
 
 fn parse_page_size(value: &str) -> PageSize {
     PageSize::parse(value).unwrap_or_else(|| {
-        eprintln!("Error: --page-size must be one of: letter, rm2");
+        eprintln!("Error: --page-size must be one of: {}", PageSize::VALUE_LIST);
         std::process::exit(1);
     })
 }
 
 fn print_usage_and_exit(code: i32) -> ! {
     eprintln!(
-        "Usage: rmfeeder [--config <path>] [--output <file.pdf>] [--file <path>] [--delay N] [--page-size <letter|rm2>] [--summarize] [--pattern <name>] [--feeds] [--feeds-file <feeds.opml>] [--yt-watchlist] [--yt-limit N] [--yt-pattern <name>] [--cookies-from-browser <name>] [--no-mark-watched] [--clear-state] [--limit N] <url1> [url2] ..."
+        "Usage: rmfeeder [--config <path>] [--output <file.pdf>] [--file <path>] [--delay N] [--page-size <{}>] [--summarize] [--pattern <name>] [--feeds] [--feeds-file <feeds.opml>] [--yt-watchlist] [--yt-limit N] [--yt-pattern <name>] [--cookies-from-browser <name>] [--no-mark-watched] [--clear-state] [--limit N] <url1> [url2] ...",
+        PageSize::VALUE_HINT
     );
     std::process::exit(code);
 }

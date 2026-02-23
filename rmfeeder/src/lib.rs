@@ -33,14 +33,31 @@ pub struct AppConfig {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PageSize {
     Letter,
+    Rm1,
     Rm2,
+    Rpp,
+    RppMove,
 }
 
 impl PageSize {
+    pub const VALUE_HINT: &'static str = "letter|rm1|rm2|rmpp|rmpp-move";
+    pub const VALUE_LIST: &'static str = "letter, rm1, rm2, rmpp, rmpp-move";
+
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "letter" => Some(Self::Letter),
+            "rm1" | "remarkable1" | "remarkable-1" => Some(Self::Rm1),
             "rm2" => Some(Self::Rm2),
+            "rmpp" | "rpp" | "paperpro" | "paper-pro" | "remarkable-paper-pro" => {
+                Some(Self::Rpp)
+            }
+            "rmpp-move"
+            | "rpp-move"
+            | "paperpro-move"
+            | "paper-pro-move"
+            | "remarkable-paper-pro-move" => {
+                Some(Self::RppMove)
+            }
             _ => None,
         }
     }
@@ -48,19 +65,54 @@ impl PageSize {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Letter => "letter",
+            Self::Rm1 => "rm1",
             Self::Rm2 => "rm2",
+            Self::Rpp => "rmpp",
+            Self::RppMove => "rmpp-move",
         }
     }
 
     pub fn css_size_value(self) -> &'static str {
         match self {
             Self::Letter => "letter",
+            Self::Rm1 => "157.8mm 210.4mm",
             Self::Rm2 => "157.8mm 210.4mm",
+            Self::Rpp => "179.6mm 239.5mm",
+            Self::RppMove => "179.6mm 239.5mm",
         }
     }
 
     pub fn page_override_css(self) -> String {
         format!("@page {{ size: {}; }}", self.css_size_value())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PageSize;
+
+    #[test]
+    fn parses_new_page_size_values() {
+        assert_eq!(PageSize::parse("rm1"), Some(PageSize::Rm1));
+        assert_eq!(PageSize::parse("rmpp"), Some(PageSize::Rpp));
+        assert_eq!(PageSize::parse("rmpp-move"), Some(PageSize::RppMove));
+        assert_eq!(PageSize::parse("rpp"), Some(PageSize::Rpp));
+        assert_eq!(PageSize::parse("rpp-move"), Some(PageSize::RppMove));
+        assert_eq!(
+            PageSize::parse("remarkable-paper-pro"),
+            Some(PageSize::Rpp)
+        );
+        assert_eq!(
+            PageSize::parse("remarkable-paper-pro-move"),
+            Some(PageSize::RppMove)
+        );
+    }
+
+    #[test]
+    fn exposes_css_values_for_new_page_sizes() {
+        assert_eq!(PageSize::Rm1.css_size_value(), "157.8mm 210.4mm");
+        assert_eq!(PageSize::Rpp.css_size_value(), "179.6mm 239.5mm");
+        assert_eq!(PageSize::RppMove.css_size_value(), "179.6mm 239.5mm");
     }
 }
 

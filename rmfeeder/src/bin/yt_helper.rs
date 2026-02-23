@@ -96,7 +96,10 @@ fn main() {
             delay_secs = parse_delay(&value);
         } else if arg == "--page-size" {
             let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --page-size requires a value (letter|rm2)");
+                eprintln!(
+                    "Error: --page-size requires a value ({})",
+                    PageSize::VALUE_HINT
+                );
                 std::process::exit(1);
             });
             page_size = parse_page_size(&value);
@@ -274,7 +277,8 @@ fn main() {
 
 fn print_usage_and_exit() -> ! {
     eprintln!(
-        "Usage: yt_helper --watch-later [--config <path>] [--output <file.pdf>] [--limit N] [--pattern <name>] [--delay N] [--page-size <letter|rm2>] [--cookies-from-browser <name>] [--dry-run] [--clear-state]"
+        "Usage: yt_helper --watch-later [--config <path>] [--output <file.pdf>] [--limit N] [--pattern <name>] [--delay N] [--page-size <{}>] [--cookies-from-browser <name>] [--dry-run] [--clear-state]",
+        PageSize::VALUE_HINT
     );
     eprintln!("   or: yt_helper [--config <path>] [--clear-state]");
     eprintln!(
@@ -302,7 +306,7 @@ fn parse_delay(value: &str) -> u64 {
 
 fn parse_page_size(value: &str) -> PageSize {
     PageSize::parse(value).unwrap_or_else(|| {
-        eprintln!("Error: --page-size must be one of: letter, rm2");
+        eprintln!("Error: --page-size must be one of: {}", PageSize::VALUE_LIST);
         std::process::exit(1);
     })
 }

@@ -33,7 +33,7 @@ All workflows render through the same PDF engine and styling system (cover page,
 - Hyperlinked table of contents
 - Per-item sections with “Back to TOC” links
 - Consistent typography and layout via `styles.css`
-- Selectable page size (`letter` default, `rm2` option)
+- Selectable page size (`letter` default; reMarkable presets available)
 
 ### ✔ WeasyPrint Rendering Pipeline
 - HTML + CSS to high-quality PDF
@@ -152,13 +152,16 @@ cargo run --bin rmfeeder -- --config ~/.config/rmfeeder/custom.toml --feeds --li
 Page size can be selected per-run:
 
 ```bash
-cargo run --bin rmfeeder -- --page-size rm2 --file urls.txt
-cargo run --bin rmfeeder -- --yt-watchlist --page-size rm2
+cargo run --bin rmfeeder -- --page-size rm1 --file urls.txt
+cargo run --bin rmfeeder -- --yt-watchlist --page-size rmpp
 ```
 
 Supported values:
 - `letter` (default)
+- `rm1` (reMarkable 1)
 - `rm2`
+- `rmpp` (reMarkable Paper Pro)
+- `rmpp-move` (reMarkable Paper Pro Move)
 
 ### **Default Output Filenames**
 
