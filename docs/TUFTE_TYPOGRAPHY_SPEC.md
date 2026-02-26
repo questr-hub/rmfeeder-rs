@@ -1,5 +1,8 @@
 # Tufte-Inspired Typography Spec for reMarkable
 
+## Status
+Archived experiment. We tested this theme and decided not to adopt it as the default; current production preference remains the Charter/Avenir styling on `main`.
+
 ## Goal
 Adopt a more Tufte-like reading style (bookish serif voice, restrained hierarchy, calmer spacing) while keeping text comfortably readable on reMarkable devices.
 
