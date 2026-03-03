@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::{BTreeSet, HashSet};
 use std::env;
 use std::fs::File;
@@ -143,10 +144,10 @@ fn main() {
                         std::process::exit(1);
                     }
 
-                    if let Some(ref mut db) = state {
-                        if let Err(e) = db.mark_seen(&link) {
-                            eprintln!("Warning: failed to update state: {}", e);
-                        }
+                    if let Some(ref mut db) = state
+                        && let Err(e) = db.mark_seen(&link)
+                    {
+                        eprintln!("Warning: failed to update state: {}", e);
                     }
                 }
             }
@@ -210,15 +211,15 @@ fn init_state_db(clear_state: bool, custom_path: Option<String>) -> StateDb {
         }),
     };
 
-    if let Some(parent) = path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            eprintln!(
-                "Error: failed to create state directory {}: {}",
-                parent.display(),
-                e
-            );
-            std::process::exit(1);
-        }
+    if let Some(parent) = path.parent()
+        && let Err(e) = std::fs::create_dir_all(parent)
+    {
+        eprintln!(
+            "Error: failed to create state directory {}: {}",
+            parent.display(),
+            e
+        );
+        std::process::exit(1);
     }
 
     let conn = Connection::open(&path).unwrap_or_else(|e| {
@@ -234,11 +235,11 @@ fn init_state_db(clear_state: bool, custom_path: Option<String>) -> StateDb {
         std::process::exit(1);
     }
 
-    if clear_state {
-        if let Err(e) = conn.execute("DELETE FROM seen", []) {
-            eprintln!("Error: failed to clear state DB: {}", e);
-            std::process::exit(1);
-        }
+    if clear_state
+        && let Err(e) = conn.execute("DELETE FROM seen", [])
+    {
+        eprintln!("Error: failed to clear state DB: {}", e);
+        std::process::exit(1);
     }
 
     StateDb {
@@ -299,7 +300,7 @@ fn fetch_feed_links(
     let feed = parser::parse(bytes.as_ref())?;
 
     let mut entries = feed.entries;
-    entries.sort_by(|a, b| entry_timestamp(b).cmp(&entry_timestamp(a)));
+    entries.sort_by_key(|entry| Reverse(entry_timestamp(entry)));
 
     let mut out = Vec::new();
     for entry in entries.into_iter().take(limit) {
@@ -312,12 +313,11 @@ fn fetch_feed_links(
 }
 
 fn entry_timestamp(entry: &feed_rs::model::Entry) -> i64 {
-    let dt = entry
+    entry
         .published
         .or(entry.updated)
         .map(|d| d.timestamp())
-        .unwrap_or(0);
-    dt
+        .unwrap_or(0)
 }
 
 fn pick_entry_link(entry: &feed_rs::model::Entry) -> Option<String> {

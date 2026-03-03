@@ -374,21 +374,21 @@ fn main() {
 
         attempted += 1;
 
-        if candidate.use_seen_state {
-            if let Some(db) = state.as_mut() {
-                match db.should_emit(&candidate.url) {
-                    Ok(false) => {
-                        skipped += 1;
-                        eprintln!(
-                            "already seen, skipping item: {} [source={}]",
-                            candidate.url, candidate.source
-                        );
-                        continue;
-                    }
-                    Ok(true) => {}
-                    Err(e) => {
-                        eprintln!("Warning: state check failed for {}: {}", candidate.url, e);
-                    }
+        if candidate.use_seen_state
+            && let Some(db) = state.as_mut()
+        {
+            match db.should_emit(&candidate.url) {
+                Ok(false) => {
+                    skipped += 1;
+                    eprintln!(
+                        "already seen, skipping item: {} [source={}]",
+                        candidate.url, candidate.source
+                    );
+                    continue;
+                }
+                Ok(true) => {}
+                Err(e) => {
+                    eprintln!("Warning: state check failed for {}: {}", candidate.url, e);
                 }
             }
         }
@@ -431,7 +431,7 @@ fn main() {
 
         let title = article.title;
         let content_html = if summarize {
-            match summarize_html(&article.content.to_string(), &normalized, &pattern) {
+            match summarize_html(article.content.as_ref(), &normalized, &pattern) {
                 Ok(value) => value,
                 Err(e) => {
                     failed += 1;
@@ -450,15 +450,14 @@ fn main() {
         });
         included += 1;
 
-        if candidate.use_seen_state {
-            if let Some(db) = state.as_mut() {
-                if let Err(e) = db.mark_seen(&candidate.url) {
-                    eprintln!(
-                        "Warning: failed to update state for {}: {}",
-                        candidate.url, e
-                    );
-                }
-            }
+        if candidate.use_seen_state
+            && let Some(db) = state.as_mut()
+            && let Err(e) = db.mark_seen(&candidate.url)
+        {
+            eprintln!(
+                "Warning: failed to update state for {}: {}",
+                candidate.url, e
+            );
         }
 
         if delay_secs > 0 {
@@ -520,16 +519,16 @@ fn main() {
             included += 1;
             yt_included += 1;
 
-            if let Some(db) = state.as_mut() {
-                if let Err(e) = db.mark_seen(&state_key) {
-                    eprintln!("Warning: failed to update state for {}: {}", video.url, e);
-                }
+            if let Some(db) = state.as_mut()
+                && let Err(e) = db.mark_seen(&state_key)
+            {
+                eprintln!("Warning: failed to update state for {}: {}", video.url, e);
             }
 
-            if yt_mark_watched_on_success {
-                if let Err(e) = youtube::mark_watched(&yt_cookies_browser, &video.url) {
-                    eprintln!("Warning: failed to mark watched {}: {}", video.url, e);
-                }
+            if yt_mark_watched_on_success
+                && let Err(e) = youtube::mark_watched(&yt_cookies_browser, &video.url)
+            {
+                eprintln!("Warning: failed to mark watched {}: {}", video.url, e);
             }
 
             if yt_delay > 0 {

@@ -87,35 +87,6 @@ impl PageSize {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::PageSize;
-
-    #[test]
-    fn parses_new_page_size_values() {
-        assert_eq!(PageSize::parse("rm1"), Some(PageSize::Rm1));
-        assert_eq!(PageSize::parse("rmpp"), Some(PageSize::Rpp));
-        assert_eq!(PageSize::parse("rmpp-move"), Some(PageSize::RppMove));
-        assert_eq!(PageSize::parse("rpp"), Some(PageSize::Rpp));
-        assert_eq!(PageSize::parse("rpp-move"), Some(PageSize::RppMove));
-        assert_eq!(
-            PageSize::parse("remarkable-paper-pro"),
-            Some(PageSize::Rpp)
-        );
-        assert_eq!(
-            PageSize::parse("remarkable-paper-pro-move"),
-            Some(PageSize::RppMove)
-        );
-    }
-
-    #[test]
-    fn exposes_css_values_for_new_page_sizes() {
-        assert_eq!(PageSize::Rm1.css_size_value(), "157.8mm 210.4mm");
-        assert_eq!(PageSize::Rpp.css_size_value(), "179.6mm 239.5mm");
-        assert_eq!(PageSize::RppMove.css_size_value(), "179.6mm 239.5mm");
-    }
-}
-
 pub fn load_config() -> Result<Option<AppConfig>, Box<dyn std::error::Error>> {
     let path = default_config_path();
     load_config_from_path(path.to_string_lossy().as_ref())
@@ -150,10 +121,10 @@ pub fn default_feeds_opml_path() -> PathBuf {
 }
 
 pub fn default_config_dir() -> Option<PathBuf> {
-    if let Ok(xdg_config_home) = std::env::var("XDG_CONFIG_HOME") {
-        if !xdg_config_home.trim().is_empty() {
-            return Some(Path::new(&xdg_config_home).join("rmfeeder"));
-        }
+    if let Ok(xdg_config_home) = std::env::var("XDG_CONFIG_HOME")
+        && !xdg_config_home.trim().is_empty()
+    {
+        return Some(Path::new(&xdg_config_home).join("rmfeeder"));
     }
 
     if let Ok(home) = std::env::var("HOME") {
@@ -164,10 +135,10 @@ pub fn default_config_dir() -> Option<PathBuf> {
 }
 
 pub fn expand_tilde_path(path: &str) -> PathBuf {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            return Path::new(&home).join(rest);
-        }
+    if let Some(rest) = path.strip_prefix("~/")
+        && let Ok(home) = std::env::var("HOME")
+    {
+        return Path::new(&home).join(rest);
     }
     PathBuf::from(path)
 }
@@ -206,7 +177,7 @@ pub fn process_url_to_pdf_with_options(
 
     if let Some(article) = extractor::extract_article(&html, Some(&normalized)) {
         let body_html = if summarize {
-            summarize_html(&article.content.to_string(), &normalized, pattern)?
+            summarize_html(article.content.as_ref(), &normalized, pattern)?
         } else {
             article.content.to_string()
         };
@@ -295,4 +266,33 @@ fn run_fabric(pattern: &str, input: &str) -> Result<String, Box<dyn std::error::
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PageSize;
+
+    #[test]
+    fn parses_new_page_size_values() {
+        assert_eq!(PageSize::parse("rm1"), Some(PageSize::Rm1));
+        assert_eq!(PageSize::parse("rmpp"), Some(PageSize::Rpp));
+        assert_eq!(PageSize::parse("rmpp-move"), Some(PageSize::RppMove));
+        assert_eq!(PageSize::parse("rpp"), Some(PageSize::Rpp));
+        assert_eq!(PageSize::parse("rpp-move"), Some(PageSize::RppMove));
+        assert_eq!(
+            PageSize::parse("remarkable-paper-pro"),
+            Some(PageSize::Rpp)
+        );
+        assert_eq!(
+            PageSize::parse("remarkable-paper-pro-move"),
+            Some(PageSize::RppMove)
+        );
+    }
+
+    #[test]
+    fn exposes_css_values_for_new_page_sizes() {
+        assert_eq!(PageSize::Rm1.css_size_value(), "157.8mm 210.4mm");
+        assert_eq!(PageSize::Rpp.css_size_value(), "179.6mm 239.5mm");
+        assert_eq!(PageSize::RppMove.css_size_value(), "179.6mm 239.5mm");
+    }
 }

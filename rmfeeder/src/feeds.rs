@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::HashSet;
 
 use feed_rs::parser;
@@ -49,13 +50,14 @@ fn collect_sources(
         .map(str::trim)
         .filter(|value| !value.is_empty());
 
-    if let Some(feed_url) = node.attribute("xmlUrl").map(str::trim) {
-        if !feed_url.is_empty() && seen_feed_urls.insert(feed_url.to_string()) {
-            sources.push(FeedSource {
-                feed_url: feed_url.to_string(),
-                section: current_section.map(ToString::to_string),
-            });
-        }
+    if let Some(feed_url) = node.attribute("xmlUrl").map(str::trim)
+        && !feed_url.is_empty()
+        && seen_feed_urls.insert(feed_url.to_string())
+    {
+        sources.push(FeedSource {
+            feed_url: feed_url.to_string(),
+            section: current_section.map(ToString::to_string),
+        });
     }
 
     let next_section = if node.attribute("xmlUrl").is_some() {
@@ -79,7 +81,7 @@ pub fn fetch_feed_links(
     let feed = parser::parse(bytes.as_ref())?;
 
     let mut entries = feed.entries;
-    entries.sort_by(|a, b| entry_timestamp(b).cmp(&entry_timestamp(a)));
+    entries.sort_by_key(|entry| Reverse(entry_timestamp(entry)));
 
     let mut out = Vec::new();
     for entry in entries.into_iter().take(limit) {

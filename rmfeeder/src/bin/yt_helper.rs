@@ -231,16 +231,16 @@ fn main() {
         articles.push((video.title.clone(), body_html));
         included += 1;
 
-        if let Some(ref mut db) = state {
-            if let Err(e) = db.mark_seen(&state_key) {
-                eprintln!("Warning: failed to update state for {}: {}", video.url, e);
-            }
+        if let Some(ref mut db) = state
+            && let Err(e) = db.mark_seen(&state_key)
+        {
+            eprintln!("Warning: failed to update state for {}: {}", video.url, e);
         }
 
-        if mark_watched_on_success {
-            if let Err(e) = mark_watched(&cookies_browser, &video.url) {
-                eprintln!("Warning: failed to mark watched {}: {}", video.url, e);
-            }
+        if mark_watched_on_success
+            && let Err(e) = mark_watched(&cookies_browser, &video.url)
+        {
+            eprintln!("Warning: failed to mark watched {}: {}", video.url, e);
         }
 
         if delay_secs > 0 {
@@ -469,15 +469,15 @@ fn init_state_db(clear_state: bool, custom_path: Option<String>) -> StateDb {
         }),
     };
 
-    if let Some(parent) = path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            eprintln!(
-                "Error: failed to create state directory {}: {}",
-                parent.display(),
-                e
-            );
-            std::process::exit(1);
-        }
+    if let Some(parent) = path.parent()
+        && let Err(e) = std::fs::create_dir_all(parent)
+    {
+        eprintln!(
+            "Error: failed to create state directory {}: {}",
+            parent.display(),
+            e
+        );
+        std::process::exit(1);
     }
 
     let conn = Connection::open(&path).unwrap_or_else(|e| {
@@ -493,11 +493,11 @@ fn init_state_db(clear_state: bool, custom_path: Option<String>) -> StateDb {
         std::process::exit(1);
     }
 
-    if clear_state {
-        if let Err(e) = conn.execute("DELETE FROM seen", []) {
-            eprintln!("Error: failed to clear state DB: {}", e);
-            std::process::exit(1);
-        }
+    if clear_state
+        && let Err(e) = conn.execute("DELETE FROM seen", [])
+    {
+        eprintln!("Error: failed to clear state DB: {}", e);
+        std::process::exit(1);
     }
 
     StateDb {

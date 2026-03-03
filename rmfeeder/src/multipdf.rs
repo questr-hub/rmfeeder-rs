@@ -63,7 +63,7 @@ pub fn generate_multi_pdf(
 
         let title = article.title;
         let content_html = if summarize {
-            match summarize_html(&article.content.to_string(), &normalized, pattern) {
+            match summarize_html(article.content.as_ref(), &normalized, pattern) {
                 Ok(value) => value,
                 Err(e) => {
                     eprintln!("Skipping {}: summary failed: {}", url, e);
