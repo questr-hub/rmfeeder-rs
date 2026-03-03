@@ -32,4 +32,7 @@ url-list*.txt
 url_list*.txt
 output*.html
 single-*.html
+bundle-*.html
+single-summary-*.html
+bundle-summary-*.html
 *.opml
