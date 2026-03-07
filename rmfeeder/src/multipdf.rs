@@ -118,6 +118,26 @@ pub fn generate_pdf_bundle_with_sections(
     cover_subtitle: &str,
     page_size: PageSize,
 ) -> Result<(), Box<dyn Error>> {
+    generate_pdf_bundle_with_render_options(
+        articles,
+        output_path,
+        cover_title,
+        cover_subtitle,
+        page_size,
+        true,
+        true,
+    )
+}
+
+pub fn generate_pdf_bundle_with_render_options(
+    articles: &[BundleArticle],
+    output_path: &str,
+    cover_title: &str,
+    cover_subtitle: &str,
+    page_size: PageSize,
+    include_toc: bool,
+    include_back_to_toc_links: bool,
+) -> Result<(), Box<dyn Error>> {
     if articles.is_empty() {
         return Err("No articles fetched".into());
     }
@@ -139,59 +159,74 @@ pub fn generate_pdf_bundle_with_sections(
     );
 
     // -------- Build TOC --------
-    let mut toc_items = String::new();
-    let mut last_section: Option<&str> = None;
-    for (idx, article) in articles.iter().enumerate() {
-        let id = format!("article-{}", idx + 1);
-        let safe_title = escape_html(&article.title);
-        let current_section = article.section.as_deref();
+    let toc_html = if include_toc {
+        let mut toc_items = String::new();
+        let mut last_section: Option<&str> = None;
+        for (idx, article) in articles.iter().enumerate() {
+            let id = format!("article-{}", idx + 1);
+            let safe_title = escape_html(&article.title);
+            let current_section = article.section.as_deref();
 
-        if current_section != last_section {
-            if let Some(section) = current_section {
-                let safe_section = escape_html(section);
-                toc_items.push_str(&format!(
-                    "<li class=\"toc-section\">{}</li>\n",
-                    safe_section
-                ));
+            if current_section != last_section {
+                if let Some(section) = current_section {
+                    let safe_section = escape_html(section);
+                    toc_items.push_str(&format!(
+                        "<li class=\"toc-section\">{}</li>\n",
+                        safe_section
+                    ));
+                }
+                last_section = current_section;
             }
-            last_section = current_section;
+
+            toc_items.push_str(&format!(
+                "<li><a href=\"#{}\">{}</a></li>\n",
+                id, safe_title
+            ));
         }
 
-        toc_items.push_str(&format!(
-            "<li><a href=\"#{}\">{}</a></li>\n",
-            id, safe_title
-        ));
-    }
-
-    let toc_html = format!(
-        "<section class=\"toc-page\">
+        format!(
+            "<section class=\"toc-page\">
             <h1 class=\"toc-title\">Contents</h1>
             <ul class=\"toc-list\">
             {items}
             </ul>
         </section>",
-        items = toc_items
-    );
+            items = toc_items
+        )
+    } else {
+        String::new()
+    };
 
     // -------- Build Article Blocks --------
     let mut article_blocks = String::new();
     for (idx, article) in articles.iter().enumerate() {
         let id = format!("article-{}", idx + 1);
         let safe_title = escape_html(&article.title);
+        let back_to_toc_html = if include_back_to_toc_links {
+            "<p><a class=\"back-home\" href=\"#toc\">📄 Back to TOC</a></p>"
+        } else {
+            ""
+        };
 
         article_blocks.push_str(&format!(
             "<section id=\"{id}\" class=\"article-block\">
                 <h1>{title}</h1>
                 {body}
-                <p><a class=\"back-home\" href=\"#toc\">📄 Back to TOC</a></p>
+                {back_to_toc_html}
             </section>\n",
             id = id,
             title = safe_title,
-            body = article.content_html
+            body = article.content_html,
+            back_to_toc_html = back_to_toc_html
         ));
     }
 
     // -------- Combine HTML --------
+    let toc_anchor = if include_toc {
+        "<a id=\"toc\"></a>"
+    } else {
+        ""
+    };
     let full_html = format!(
         "<!DOCTYPE html>
 <html>
@@ -205,7 +240,7 @@ pub fn generate_pdf_bundle_with_sections(
 </head>
 <body>
 {cover}
-<a id=\"toc\"></a>
+{toc_anchor}
 {toc}
 {articles}
 </body>
@@ -213,6 +248,7 @@ pub fn generate_pdf_bundle_with_sections(
         base_css = BASE_CSS,
         page_override_css = page_size.page_override_css(),
         cover = cover_html,
+        toc_anchor = toc_anchor,
         toc = toc_html,
         articles = article_blocks
     );

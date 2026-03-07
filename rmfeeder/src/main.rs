@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::env;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
@@ -12,7 +12,8 @@ use reqwest::blocking::Client;
 use rmfeeder::multipdf;
 use rmfeeder::{
     PageSize, default_config_path, default_feeds_opml_path, extractor, feeds, fetcher,
-    load_config_from_path, process_url_to_pdf_with_options, state, summarize_html, youtube,
+    load_config_from_path, markdown, process_url_to_pdf_with_options, state,
+    summarize_content_html, summarize_html, youtube,
 };
 
 struct UrlCandidate {
@@ -20,6 +21,23 @@ struct UrlCandidate {
     source: &'static str,
     use_seen_state: bool,
     toc_section: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+struct SourceSelection {
+    label: &'static str,
+    kind: SourceKind,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum SourceKind {
+    UrlArgs,
+    UrlFile,
+    Feeds,
+    YtWatchlist,
+    MarkdownFile,
+    MarkdownDir,
+    Stdin,
 }
 
 fn main() {
@@ -55,6 +73,7 @@ fn main() {
     let mut clear_state = false;
 
     let mut feeds_limit: usize = config.as_ref().and_then(|c| c.limit).unwrap_or(3);
+    let mut markdown_limit: Option<usize> = config.as_ref().and_then(|c| c.limit);
     let mut opml_path: Option<String> = config.as_ref().and_then(|c| c.feeds_opml_path.clone());
 
     let mut yt_limit: usize = config.as_ref().and_then(|c| c.yt_limit).unwrap_or(10);
@@ -75,8 +94,11 @@ fn main() {
     let mut state_db_path: Option<String> = config.as_ref().and_then(|c| c.state_db_path.clone());
 
     let mut direct_urls: Vec<String> = Vec::new();
+    let mut markdown_file: Option<String> = None;
+    let mut markdown_dir: Option<String> = None;
+    let mut stdin_enabled = false;
     let mut explicit_input_requested = false;
-    let mut file_input_used = false;
+    let mut feeds_file_flag_used = false;
 
     let mut args = raw_args.into_iter();
     while let Some(arg) = args.next() {
@@ -101,6 +123,23 @@ fn main() {
                 std::process::exit(1);
             });
             input_file = Some(value);
+            explicit_input_requested = true;
+        } else if arg == "--markdown" {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("Error: --markdown requires a path");
+                std::process::exit(1);
+            });
+            markdown_file = Some(value);
+            explicit_input_requested = true;
+        } else if arg == "--markdown-dir" {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("Error: --markdown-dir requires a path");
+                std::process::exit(1);
+            });
+            markdown_dir = Some(value);
+            explicit_input_requested = true;
+        } else if arg == "--stdin" {
+            stdin_enabled = true;
             explicit_input_requested = true;
         } else if arg == "--delay" {
             let value = args.next().unwrap_or_else(|| {
@@ -142,6 +181,7 @@ fn main() {
             let parsed = parse_limit(&value);
             feeds_limit = parsed;
             yt_limit = parsed;
+            markdown_limit = Some(parsed);
         } else if arg == "--yt-limit" {
             let value = args.next().unwrap_or_else(|| {
                 eprintln!("Error: --yt-limit requires a number");
@@ -168,10 +208,19 @@ fn main() {
                 std::process::exit(1);
             });
             opml_path = Some(value);
+            feeds_enabled = true;
+            feeds_file_flag_used = true;
+            explicit_input_requested = true;
         } else if let Some(value) = arg.strip_prefix("--output=") {
             output_path = Some(value.to_string());
         } else if let Some(value) = arg.strip_prefix("--file=") {
             input_file = Some(value.to_string());
+            explicit_input_requested = true;
+        } else if let Some(value) = arg.strip_prefix("--markdown=") {
+            markdown_file = Some(value.to_string());
+            explicit_input_requested = true;
+        } else if let Some(value) = arg.strip_prefix("--markdown-dir=") {
+            markdown_dir = Some(value.to_string());
             explicit_input_requested = true;
         } else if let Some(value) = arg.strip_prefix("--delay=") {
             delay_secs = parse_delay(value);
@@ -184,6 +233,7 @@ fn main() {
             let parsed = parse_limit(value);
             feeds_limit = parsed;
             yt_limit = parsed;
+            markdown_limit = Some(parsed);
         } else if let Some(value) = arg.strip_prefix("--yt-limit=") {
             yt_limit = parse_limit(value);
         } else if let Some(value) = arg.strip_prefix("--yt-pattern=") {
@@ -192,6 +242,9 @@ fn main() {
             yt_cookies_browser = value.to_string();
         } else if let Some(value) = arg.strip_prefix("--feeds-file=") {
             opml_path = Some(value.to_string());
+            feeds_enabled = true;
+            feeds_file_flag_used = true;
+            explicit_input_requested = true;
         } else if arg.starts_with('-') {
             eprintln!("Error: unexpected argument: {}", arg);
             print_usage_and_exit(1);
@@ -214,6 +267,112 @@ fn main() {
         }
     }
 
+    let mut selected_sources: Vec<SourceSelection> = Vec::new();
+    if !direct_urls.is_empty() {
+        selected_sources.push(SourceSelection {
+            label: "URL args",
+            kind: SourceKind::UrlArgs,
+        });
+    }
+    if input_file.is_some() {
+        selected_sources.push(SourceSelection {
+            label: "--file",
+            kind: SourceKind::UrlFile,
+        });
+    }
+    if feeds_enabled {
+        selected_sources.push(SourceSelection {
+            label: if feeds_file_flag_used {
+                "--feeds-file"
+            } else {
+                "--feeds"
+            },
+            kind: SourceKind::Feeds,
+        });
+    }
+    if yt_watchlist_enabled {
+        selected_sources.push(SourceSelection {
+            label: "--yt-watchlist",
+            kind: SourceKind::YtWatchlist,
+        });
+    }
+    if markdown_file.is_some() {
+        selected_sources.push(SourceSelection {
+            label: "--markdown",
+            kind: SourceKind::MarkdownFile,
+        });
+    }
+    if markdown_dir.is_some() {
+        selected_sources.push(SourceSelection {
+            label: "--markdown-dir",
+            kind: SourceKind::MarkdownDir,
+        });
+    }
+    if stdin_enabled {
+        selected_sources.push(SourceSelection {
+            label: "--stdin",
+            kind: SourceKind::Stdin,
+        });
+    }
+
+    if selected_sources.len() > 1 {
+        let first = selected_sources[0].label;
+        let second = selected_sources[1].label;
+        eprintln!(
+            "error: conflicting source flags: {} and {} cannot be used together",
+            first, second
+        );
+        std::process::exit(1);
+    }
+
+    let selected_source_kind = selected_sources.first().map(|s| s.kind);
+
+    if let Some(path) = markdown_file {
+        let output_path = output_path.unwrap_or_else(|| {
+            let prefix = if summarize {
+                "single-summary"
+            } else {
+                "single"
+            };
+            render_output_path(prefix, output_dir.take())
+        });
+        run_markdown_file_mode(&path, &output_path, summarize, &pattern, page_size);
+        return;
+    }
+
+    if let Some(path) = markdown_dir {
+        let output_path = output_path.unwrap_or_else(|| {
+            let prefix = if summarize {
+                "bundle-summary"
+            } else {
+                "bundle"
+            };
+            render_output_path(prefix, output_dir.take())
+        });
+        run_markdown_dir_mode(
+            &path,
+            &output_path,
+            summarize,
+            &pattern,
+            markdown_limit,
+            page_size,
+        );
+        return;
+    }
+
+    if stdin_enabled {
+        let output_path = output_path.unwrap_or_else(|| {
+            let prefix = if summarize {
+                "single-summary"
+            } else {
+                "single"
+            };
+            render_output_path(prefix, output_dir.take())
+        });
+        run_stdin_mode(&output_path, summarize, &pattern, page_size);
+        return;
+    }
+
     let mut url_candidates: Vec<UrlCandidate> = direct_urls
         .iter()
         .map(|url| UrlCandidate {
@@ -225,7 +384,6 @@ fn main() {
         .collect();
 
     if let Some(path) = input_file {
-        file_input_used = true;
         let file = File::open(&path).unwrap_or_else(|e| {
             eprintln!("Error: failed to open {}: {}", path, e);
             std::process::exit(1);
@@ -255,7 +413,7 @@ fn main() {
         print_usage_and_exit(1);
     }
 
-    if !using_source_workflows && direct_urls.len() == 1 && !file_input_used {
+    if selected_source_kind == Some(SourceKind::UrlArgs) && direct_urls.len() == 1 {
         let output_path = output_path.unwrap_or_else(|| {
             let prefix = if summarize {
                 "single-summary"
@@ -576,6 +734,208 @@ fn main() {
     }
 }
 
+fn run_markdown_file_mode(
+    path: &str,
+    output_path: &str,
+    summarize: bool,
+    pattern: &str,
+    page_size: PageSize,
+) {
+    let path_buf = PathBuf::from(path);
+    if !path_buf.is_file() {
+        eprintln!("error: file not found: {}", path);
+        std::process::exit(1);
+    }
+
+    let article =
+        markdown_file_to_bundle_article(&path_buf, summarize, pattern).unwrap_or_else(|e| {
+            eprintln!("error: failed to read {}: {}", path, e);
+            std::process::exit(1);
+        });
+
+    let cover_subtitle = format!("Source: {} • Entries: 1", path_buf.to_string_lossy());
+    let articles = vec![article];
+    match multipdf::generate_pdf_bundle_with_render_options(
+        &articles,
+        output_path,
+        &articles[0].title,
+        &cover_subtitle,
+        page_size,
+        false,
+        false,
+    ) {
+        Ok(_) => println!("Wrote {}", output_path),
+        Err(e) => {
+            eprintln!("Error: failed to generate PDF: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run_markdown_dir_mode(
+    path: &str,
+    output_path: &str,
+    summarize: bool,
+    pattern: &str,
+    limit: Option<usize>,
+    page_size: PageSize,
+) {
+    let dir_path = PathBuf::from(path);
+    if !dir_path.is_dir() {
+        eprintln!("error: not a directory: {}", path);
+        std::process::exit(1);
+    }
+
+    let mut markdown_files = list_markdown_files_flat(&dir_path).unwrap_or_else(|e| {
+        eprintln!("error: failed to read directory {}: {}", path, e);
+        std::process::exit(1);
+    });
+    markdown_files.sort_by_key(|p| {
+        p.file_name()
+            .map(|n| n.to_string_lossy().to_ascii_lowercase())
+    });
+    if let Some(limit) = limit {
+        markdown_files.truncate(limit);
+    }
+
+    if markdown_files.is_empty() {
+        eprintln!("error: no markdown files found in {}", path);
+        std::process::exit(1);
+    }
+
+    let mut articles = Vec::with_capacity(markdown_files.len());
+    for file_path in markdown_files {
+        let article = markdown_file_to_bundle_article(&file_path, summarize, pattern)
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "error: failed to read {}: {}",
+                    file_path.to_string_lossy(),
+                    e
+                );
+                std::process::exit(1);
+            });
+        articles.push(article);
+    }
+
+    let bundle_title = dir_path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "markdown-bundle".to_string());
+    let cover_subtitle = format!(
+        "Source: {} • Entries: {}",
+        dir_path.to_string_lossy(),
+        articles.len()
+    );
+    match multipdf::generate_pdf_bundle_with_sections(
+        &articles,
+        output_path,
+        &bundle_title,
+        &cover_subtitle,
+        page_size,
+    ) {
+        Ok(_) => println!("Wrote {}", output_path),
+        Err(e) => {
+            eprintln!("Error: failed to generate PDF: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run_stdin_mode(output_path: &str, summarize: bool, pattern: &str, page_size: PageSize) {
+    let mut input = String::new();
+    std::io::stdin()
+        .read_to_string(&mut input)
+        .unwrap_or_else(|e| {
+            eprintln!("error: failed to read stdin: {}", e);
+            std::process::exit(1);
+        });
+    if input.trim().is_empty() {
+        eprintln!("error: stdin produced no content");
+        std::process::exit(1);
+    }
+
+    let article = markdown_content_to_bundle_article(&input, "stdin-bundle", summarize, pattern)
+        .unwrap_or_else(|e| {
+            eprintln!("error: failed to process stdin: {}", e);
+            std::process::exit(1);
+        });
+    let cover_subtitle = "Source: <stdin> • Entries: 1";
+    let articles = vec![article];
+    match multipdf::generate_pdf_bundle_with_render_options(
+        &articles,
+        output_path,
+        &articles[0].title,
+        cover_subtitle,
+        page_size,
+        false,
+        false,
+    ) {
+        Ok(_) => println!("Wrote {}", output_path),
+        Err(e) => {
+            eprintln!("Error: failed to generate PDF: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn list_markdown_files_flat(dir_path: &Path) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut out = Vec::new();
+    for entry in fs::read_dir(dir_path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(extension) = path.extension().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if extension.eq_ignore_ascii_case("md") {
+            out.push(path);
+        }
+    }
+    Ok(out)
+}
+
+fn markdown_file_to_bundle_article(
+    path: &Path,
+    summarize: bool,
+    pattern: &str,
+) -> Result<multipdf::BundleArticle, Box<dyn std::error::Error>> {
+    let raw_content = fs::read_to_string(path)?;
+    let fallback_title = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "untitled".to_string());
+    markdown_content_to_bundle_article(&raw_content, &fallback_title, summarize, pattern)
+}
+
+fn markdown_content_to_bundle_article(
+    raw_markdown: &str,
+    fallback_title: &str,
+    summarize: bool,
+    pattern: &str,
+) -> Result<multipdf::BundleArticle, Box<dyn std::error::Error>> {
+    let without_frontmatter = markdown::strip_yaml_frontmatter(raw_markdown);
+    let title = markdown::extract_first_h1(&without_frontmatter)
+        .unwrap_or_else(|| fallback_title.to_string());
+    let body_markdown = markdown::strip_first_h1(&without_frontmatter);
+
+    let rendered_html = markdown::markdown_to_html(&body_markdown);
+    let content_html = if summarize {
+        summarize_content_html(&rendered_html, pattern)?
+    } else {
+        rendered_html
+    };
+
+    Ok(multipdf::BundleArticle {
+        section: None,
+        title,
+        content_html,
+    })
+}
+
 fn render_output_path(prefix: &str, output_dir: Option<String>) -> String {
     let filename = format!(
         "{}-{}.pdf",
@@ -605,14 +965,17 @@ fn parse_limit(value: &str) -> usize {
 
 fn parse_page_size(value: &str) -> PageSize {
     PageSize::parse(value).unwrap_or_else(|| {
-        eprintln!("Error: --page-size must be one of: {}", PageSize::VALUE_LIST);
+        eprintln!(
+            "Error: --page-size must be one of: {}",
+            PageSize::VALUE_LIST
+        );
         std::process::exit(1);
     })
 }
 
 fn print_usage_and_exit(code: i32) -> ! {
     eprintln!(
-        "Usage: rmfeeder [--config <path>] [--output <file.pdf>] [--file <path>] [--delay N] [--page-size <{}>] [--summarize] [--pattern <name>] [--feeds] [--feeds-file <feeds.opml>] [--yt-watchlist] [--yt-limit N] [--yt-pattern <name>] [--cookies-from-browser <name>] [--no-mark-watched] [--clear-state] [--limit N] <url1> [url2] ...",
+        "Usage: rmfeeder [--config <path>] [--output <file.pdf>] [--file <path> | --feeds [--feeds-file <feeds.opml>] | --yt-watchlist | --markdown <path> | --markdown-dir <path> | --stdin | <url1> [url2] ...] [--delay N] [--page-size <{}>] [--summarize] [--pattern <name>] [--yt-limit N] [--yt-pattern <name>] [--cookies-from-browser <name>] [--no-mark-watched] [--clear-state] [--limit N]",
         PageSize::VALUE_HINT
     );
     std::process::exit(code);

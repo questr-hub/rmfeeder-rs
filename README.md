@@ -1,12 +1,14 @@
 # rmfeeder-rs
 
 `rmfeeder` is a Rust-based reading-bundle tool for reMarkable and other PDF readers.
-It supports three core workflows with a shared visual output:
+It supports multiple workflows with a shared visual output:
 - direct URLs
+- local markdown files/directories
+- piped markdown from stdin
 - RSS/OPML feed workflows
 - YouTube Watch Later summaries
 
-All workflows render through the same PDF engine and styling system (cover page, TOC, navigation links, and typography).
+All workflows render through the same PDF engine and styling system (cover pages, typography, and TOC/navigation for bundle modes).
 
 ---
 
@@ -16,6 +18,13 @@ All workflows render through the same PDF engine and styling system (cover page,
 - Single URL mode
 - Multi-URL bundle mode
 - Optional summary mode with `fabric-ai` (`--summarize`, `--pattern`)
+
+### ✔ Markdown & Stdin Ingestion
+- `--markdown <path>` converts one markdown file to a single-entry PDF (no TOC)
+- `--markdown-dir <path>` converts a directory of `.md` files to a bundle with TOC
+- `--stdin` reads markdown from stdin and renders a single-entry PDF (no TOC)
+- Frontmatter stripping for leading YAML blocks (`--- ... ---`)
+- H1-based title selection with filename/stdin fallback
 
 ### ✔ Feed Workflow (OPML + State)
 - `rmfeeder --feeds` extracts recent article URLs from feeds in an OPML file
@@ -108,7 +117,7 @@ cargo build --release
 
 Primary entrypoint:
 
-- `rmfeeder` (unified URL/file/feeds/YouTube bundle generation)
+- `rmfeeder` (unified URL/file/feeds/YouTube/markdown/stdin PDF generation)
 
 Compatibility helpers are still available:
 
@@ -169,7 +178,10 @@ If `--output` is not provided, filenames are mode-based and timestamped:
 
 - `rmfeeder` single URL: `single-YYYY-MM-DD-HH-MM-SS.pdf`
 - `rmfeeder` single URL + `--summarize`: `single-summary-YYYY-MM-DD-HH-MM-SS.pdf`
+- `rmfeeder` with `--markdown`: `single-YYYY-MM-DD-HH-MM-SS.pdf`
+- `rmfeeder` with `--stdin`: `single-YYYY-MM-DD-HH-MM-SS.pdf`
 - `rmfeeder` bundle (multiple URLs or any `--file`): `bundle-YYYY-MM-DD-HH-MM-SS.pdf`
+- `rmfeeder` with `--markdown-dir`: `bundle-YYYY-MM-DD-HH-MM-SS.pdf`
 - `rmfeeder` bundle + `--summarize`: `bundle-summary-YYYY-MM-DD-HH-MM-SS.pdf`
 - `rmfeeder` with `--yt-watchlist`: `bundle-summary-YYYY-MM-DD-HH-MM-SS.pdf`
 - `yt_helper` watch later (legacy helper): `yt-watchlist-YYYY-MM-DD-HH-MM-SS.pdf`
@@ -178,7 +190,7 @@ If `--output` is not provided, filenames are mode-based and timestamped:
 
 ### **Unified Source Selection**
 
-Use one command to combine sources:
+Choose exactly one source mode per run:
 
 ```bash
 # Direct URLs
@@ -190,24 +202,40 @@ cargo run --bin rmfeeder -- --file urls.txt
 # OPML feeds (defaults to ~/.config/rmfeeder/feeds.opml)
 cargo run --bin rmfeeder -- --feeds
 
+# OPML feeds using an explicit OPML path
+cargo run --bin rmfeeder -- --feeds-file feeds.opml
+
 # YouTube Watch Later summaries
 cargo run --bin rmfeeder -- --yt-watchlist
 
-# Combined run (feeds + YouTube + direct URL)
-cargo run --bin rmfeeder -- --feeds --yt-watchlist "https://example.com/c"
+# Single markdown file
+cargo run --bin rmfeeder -- --markdown notes.md
+
+# Markdown directory bundle
+cargo run --bin rmfeeder -- --markdown-dir notes/
+
+# Markdown from stdin
+cat notes.md | cargo run --bin rmfeeder -- --stdin
 ```
 
-Source selectors are additive:
+Source selectors are mutually exclusive:
 
-- `--feeds`
-- `--feeds-file <feeds.opml>`
-- `--yt-watchlist`
-- `--file <path>`
 - direct URL args (`<url1> [url2] ...`)
+- `--file <path>`
+- `--feeds` or `--feeds-file <feeds.opml>`
+- `--yt-watchlist`
+- `--markdown <path>`
+- `--markdown-dir <path>`
+- `--stdin`
+
+If multiple source selectors are provided together, `rmfeeder` exits with:
+
+`error: conflicting source flags: <source-a> and <source-b> cannot be used together`
 
 Source-specific options:
 
 - `--limit N` sets both feeds and YouTube limits together
+- `--limit N` also limits `--markdown-dir` file count (alphabetical order)
 - `--yt-limit N` overrides only YouTube limit
 - `--yt-pattern <name>` sets YouTube summary pattern (default `youtube_summary`)
 - `--cookies-from-browser <name>` selects browser/profile for YouTube auth
@@ -299,6 +327,7 @@ rmfeeder/
     main.rs
     fetcher.rs
     extractor.rs
+    markdown.rs
     multipdf.rs
     pdf.rs
     epub.rs            (unused for now)
