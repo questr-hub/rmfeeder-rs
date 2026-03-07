@@ -42,7 +42,7 @@ All workflows render through the same PDF engine and styling system (cover pages
 - Hyperlinked table of contents
 - Per-item sections with “Back to TOC” links
 - Consistent typography and layout via `styles.css`
-- Selectable page size (`letter` default; reMarkable presets available)
+- Selectable output targets (`letter` default; e-ink, paper, and iPad presets)
 
 ### ✔ WeasyPrint Rendering Pipeline
 - HTML + CSS to high-quality PDF
@@ -165,12 +165,49 @@ cargo run --bin rmfeeder -- --page-size rm1 --file urls.txt
 cargo run --bin rmfeeder -- --yt-watchlist --page-size rmpp
 ```
 
-Supported values:
-- `letter` (default)
-- `rm1` (reMarkable 1)
-- `rm2`
-- `rmpp` (reMarkable Paper Pro)
-- `rmpp-move` (reMarkable Paper Pro Move)
+List all available targets:
+
+```bash
+cargo run --bin rmfeeder -- --list-targets
+```
+
+Supported target values (canonical flags):
+
+| Flag | Dimensions (px) | Intended device / paper |
+|---|---:|---|
+| `letter` | 2550x3300 | US Letter |
+| `rm1` | 1404x1872 | reMarkable 1 |
+| `rm2` | 1404x1872 | reMarkable 2 |
+| `rmpp` | 1620x2160 | reMarkable Paper Pro |
+| `rmpp-move` | 1620x2160 | reMarkable Paper Pro Move |
+| `scribe` | 1860x2480 | Kindle Scribe |
+| `supernote-a5x` | 1920x2560 | Supernote A5X |
+| `supernote-a5x2` | 1920x2560 | Supernote A5X2 |
+| `supernote-a6x` | 1404x1872 | Supernote A6X |
+| `supernote-a6x2` | 1404x1872 | Supernote A6X2 |
+| `boox-go103` | 1860x2480 | Boox Go 10.3 |
+| `boox-noteair` | 1860x2480 | Boox Note Air |
+| `boox-noteair4c` | 1860x2480 | Boox Note Air4 C |
+| `boox-noteair4c-color` | 930x1240 | Boox Note Air4 C color layer |
+| `boox-notemax` | 2400x3200 | Boox Note Max |
+| `a6` | 1240x1748 | ISO A6 paper |
+| `a5` | 1748x2480 | ISO A5 paper |
+| `a4` | 2480x3508 | ISO A4 paper |
+| `ipad11` | 1668x2420 | iPad Pro 11-inch |
+| `ipad13` | 2064x2752 | iPad Pro 13-inch |
+
+Notable aliases:
+
+- `rmppm` maps to `rmpp-move`
+- `A6`, `A5`, and `A4` are accepted (case-insensitive parsing)
+
+Generate sample outputs for every target:
+
+```bash
+./scripts/render-target-samples.sh
+```
+
+This writes predictable PDFs to `test-output/targets/<flag>.pdf`.
 
 ### **Default Output Filenames**
 
