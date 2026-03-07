@@ -2,6 +2,7 @@ pub mod epub;
 pub mod extractor;
 pub mod feeds;
 pub mod fetcher;
+pub mod markdown;
 pub mod multipdf;
 pub mod pdf;
 pub mod state;
@@ -48,16 +49,12 @@ impl PageSize {
             "letter" => Some(Self::Letter),
             "rm1" | "remarkable1" | "remarkable-1" => Some(Self::Rm1),
             "rm2" => Some(Self::Rm2),
-            "rmpp" | "rpp" | "paperpro" | "paper-pro" | "remarkable-paper-pro" => {
-                Some(Self::Rpp)
-            }
+            "rmpp" | "rpp" | "paperpro" | "paper-pro" | "remarkable-paper-pro" => Some(Self::Rpp),
             "rmpp-move"
             | "rpp-move"
             | "paperpro-move"
             | "paper-pro-move"
-            | "remarkable-paper-pro-move" => {
-                Some(Self::RppMove)
-            }
+            | "remarkable-paper-pro-move" => Some(Self::RppMove),
             _ => None,
         }
     }
@@ -219,8 +216,7 @@ pub fn summarize_html(
     source_url: &str,
     pattern: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let summary = run_fabric(pattern, content_html)?;
-    let summary_html = markdown_to_html(&summary);
+    let summary_html = summarize_content_html(content_html, pattern)?;
     let safe_url = escape_html(source_url);
     let source_html = format!(
         "<p class=\"article-source\">Source: <a href=\"{url}\">{url}</a></p>",
@@ -229,18 +225,12 @@ pub fn summarize_html(
     Ok(format!("{}\n{}", source_html, summary_html))
 }
 
-fn markdown_to_html(input: &str) -> String {
-    use pulldown_cmark::{Options, Parser, html};
-
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_STRIKETHROUGH);
-    options.insert(Options::ENABLE_TABLES);
-    options.insert(Options::ENABLE_TASKLISTS);
-
-    let parser = Parser::new_ext(input, options);
-    let mut out = String::new();
-    html::push_html(&mut out, parser);
-    out
+pub fn summarize_content_html(
+    content_html: &str,
+    pattern: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let summary = run_fabric(pattern, content_html)?;
+    Ok(markdown::markdown_to_html(&summary))
 }
 
 fn run_fabric(pattern: &str, input: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -279,10 +269,7 @@ mod tests {
         assert_eq!(PageSize::parse("rmpp-move"), Some(PageSize::RppMove));
         assert_eq!(PageSize::parse("rpp"), Some(PageSize::Rpp));
         assert_eq!(PageSize::parse("rpp-move"), Some(PageSize::RppMove));
-        assert_eq!(
-            PageSize::parse("remarkable-paper-pro"),
-            Some(PageSize::Rpp)
-        );
+        assert_eq!(PageSize::parse("remarkable-paper-pro"), Some(PageSize::Rpp));
         assert_eq!(
             PageSize::parse("remarkable-paper-pro-move"),
             Some(PageSize::RppMove)
