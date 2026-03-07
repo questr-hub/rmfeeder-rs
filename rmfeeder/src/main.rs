@@ -12,7 +12,7 @@ use reqwest::blocking::Client;
 use rmfeeder::multipdf;
 use rmfeeder::{
     PageSize, default_config_path, default_feeds_opml_path, extractor, feeds, fetcher,
-    load_config_from_path, markdown, process_url_to_pdf_with_options, state,
+    list_targets_csv, load_config_from_path, markdown, process_url_to_pdf_with_options, state,
     summarize_content_html, summarize_html, youtube,
 };
 
@@ -42,6 +42,11 @@ enum SourceKind {
 
 fn main() {
     let raw_args: Vec<String> = env::args().skip(1).collect();
+    if raw_args.iter().any(|arg| arg == "--list-targets") {
+        print!("{}", list_targets_csv());
+        return;
+    }
+
     let config_path = extract_config_path(&raw_args)
         .unwrap_or_else(|| default_config_path().to_string_lossy().to_string());
 
@@ -975,7 +980,7 @@ fn parse_page_size(value: &str) -> PageSize {
 
 fn print_usage_and_exit(code: i32) -> ! {
     eprintln!(
-        "Usage: rmfeeder [--config <path>] [--output <file.pdf>] [--file <path> | --feeds [--feeds-file <feeds.opml>] | --yt-watchlist | --markdown <path> | --markdown-dir <path> | --stdin | <url1> [url2] ...] [--delay N] [--page-size <{}>] [--summarize] [--pattern <name>] [--yt-limit N] [--yt-pattern <name>] [--cookies-from-browser <name>] [--no-mark-watched] [--clear-state] [--limit N]",
+        "Usage: rmfeeder [--list-targets] [--config <path>] [--output <file.pdf>] [--file <path> | --feeds [--feeds-file <feeds.opml>] | --yt-watchlist | --markdown <path> | --markdown-dir <path> | --stdin | <url1> [url2] ...] [--delay N] [--page-size <{}>] [--summarize] [--pattern <name>] [--yt-limit N] [--yt-pattern <name>] [--cookies-from-browser <name>] [--no-mark-watched] [--clear-state] [--limit N]",
         PageSize::VALUE_HINT
     );
     std::process::exit(code);
