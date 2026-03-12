@@ -142,6 +142,41 @@ pub fn generate_pdf_bundle_with_render_options(
         return Err("No articles fetched".into());
     }
 
+    let full_html = build_bundle_html(
+        articles,
+        cover_title,
+        cover_subtitle,
+        page_size,
+        include_toc,
+        include_back_to_toc_links,
+    );
+
+    let tmp_html = temp_html_path("rmfeeder_multi_tmp");
+    write(&tmp_html, full_html)?;
+
+    // -------- Generate PDF via WeasyPrint --------
+    let status = Command::new("weasyprint")
+        .arg(&tmp_html)
+        .arg(output_path)
+        .status()?;
+
+    let _ = std::fs::remove_file(&tmp_html);
+
+    if !status.success() {
+        return Err("WeasyPrint PDF generation failed".into());
+    }
+
+    Ok(())
+}
+
+fn build_bundle_html(
+    articles: &[BundleArticle],
+    cover_title: &str,
+    cover_subtitle: &str,
+    page_size: PageSize,
+    include_toc: bool,
+    include_back_to_toc_links: bool,
+) -> String {
     // -------- Build Cover Page --------
     let today = chrono::Local::now().format("%B %e, %Y").to_string();
     let safe_cover_title = escape_html(cover_title).replace("&lt;br&gt;", "<br>");
@@ -163,7 +198,8 @@ pub fn generate_pdf_bundle_with_render_options(
         let mut toc_items = String::new();
         let mut last_section: Option<&str> = None;
         for (idx, article) in articles.iter().enumerate() {
-            let id = format!("article-{}", idx + 1);
+            let article_id = format!("article-{}", idx + 1);
+            let toc_entry_id = format!("toc-item-{}", idx + 1);
             let safe_title = escape_html(&article.title);
             let current_section = article.section.as_deref();
 
@@ -179,8 +215,10 @@ pub fn generate_pdf_bundle_with_render_options(
             }
 
             toc_items.push_str(&format!(
-                "<li><a href=\"#{}\">{}</a></li>\n",
-                id, safe_title
+                "<li><a id=\"{toc_entry_id}\" href=\"#{article_id}\">{safe_title}</a></li>\n",
+                toc_entry_id = toc_entry_id,
+                article_id = article_id,
+                safe_title = safe_title
             ));
         }
 
@@ -201,11 +239,15 @@ pub fn generate_pdf_bundle_with_render_options(
     let mut article_blocks = String::new();
     for (idx, article) in articles.iter().enumerate() {
         let id = format!("article-{}", idx + 1);
+        let toc_entry_id = format!("toc-item-{}", idx + 1);
         let safe_title = escape_html(&article.title);
-        let back_to_toc_html = if include_back_to_toc_links {
-            "<p><a class=\"back-home\" href=\"#toc\">📄 Back to TOC</a></p>"
+        let back_to_toc_html = if include_back_to_toc_links && include_toc {
+            format!(
+                "<p><a class=\"back-home\" href=\"#{toc_entry_id}\">📄 Back to TOC</a></p>",
+                toc_entry_id = toc_entry_id
+            )
         } else {
-            ""
+            String::new()
         };
 
         article_blocks.push_str(&format!(
@@ -227,7 +269,7 @@ pub fn generate_pdf_bundle_with_render_options(
     } else {
         ""
     };
-    let full_html = format!(
+    format!(
         "<!DOCTYPE html>
 <html>
 <head>
@@ -251,22 +293,60 @@ pub fn generate_pdf_bundle_with_render_options(
         toc_anchor = toc_anchor,
         toc = toc_html,
         articles = article_blocks
-    );
+    )
+}
 
-    let tmp_html = temp_html_path("rmfeeder_multi_tmp");
-    write(&tmp_html, full_html)?;
+#[cfg(test)]
+mod tests {
+    use super::{BundleArticle, build_bundle_html};
+    use crate::PageSize;
 
-    // -------- Generate PDF via WeasyPrint --------
-    let status = Command::new("weasyprint")
-        .arg(&tmp_html)
-        .arg(output_path)
-        .status()?;
+    #[test]
+    fn back_to_toc_links_target_their_own_toc_entry() {
+        let articles = vec![
+            BundleArticle {
+                section: Some("Section A".to_string()),
+                title: "First".to_string(),
+                content_html: "<p>First body</p>".to_string(),
+            },
+            BundleArticle {
+                section: Some("Section A".to_string()),
+                title: "Second".to_string(),
+                content_html: "<p>Second body</p>".to_string(),
+            },
+        ];
+        let html = build_bundle_html(
+            &articles,
+            "Bundle",
+            "Subtitle",
+            PageSize::Letter,
+            true,
+            true,
+        );
 
-    let _ = std::fs::remove_file(&tmp_html);
-
-    if !status.success() {
-        return Err("WeasyPrint PDF generation failed".into());
+        assert!(html.contains("id=\"toc-item-1\" href=\"#article-1\""));
+        assert!(html.contains("id=\"toc-item-2\" href=\"#article-2\""));
+        assert!(html.contains("href=\"#toc-item-1\">📄 Back to TOC</a>"));
+        assert!(html.contains("href=\"#toc-item-2\">📄 Back to TOC</a>"));
     }
 
-    Ok(())
+    #[test]
+    fn back_to_toc_links_are_omitted_when_toc_is_disabled() {
+        let articles = vec![BundleArticle {
+            section: None,
+            title: "Only".to_string(),
+            content_html: "<p>Body</p>".to_string(),
+        }];
+        let html = build_bundle_html(
+            &articles,
+            "Bundle",
+            "Subtitle",
+            PageSize::Letter,
+            false,
+            true,
+        );
+
+        assert!(!html.contains("Back to TOC"));
+        assert!(!html.contains("toc-item-1"));
+    }
 }

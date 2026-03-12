@@ -749,7 +749,11 @@ fn main() {
             }
 
             eprintln!("Processing {}", video.url);
-            let body_html = match youtube::summarize_watch_video(&video.url, &yt_pattern) {
+            let body_html = match youtube::summarize_watch_video(
+                &video.url,
+                &yt_pattern,
+                video.channel_name.as_deref(),
+            ) {
                 Ok(value) => value,
                 Err(e) => {
                     failed += 1;
@@ -758,9 +762,20 @@ fn main() {
                 }
             };
 
+            let article_title = if let Some(channel_name) = video
+                .channel_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                format!("{} ({})", video.title, channel_name)
+            } else {
+                video.title.clone()
+            };
+
             articles.push(multipdf::BundleArticle {
                 section: Some("YouTube Watchlist".to_string()),
-                title: video.title,
+                title: article_title,
                 content_html: body_html,
             });
             included += 1;

@@ -11,6 +11,7 @@ const WATCH_LATER_URL: &str = "https://www.youtube.com/playlist?list=WL";
 pub struct YtVideo {
     pub title: String,
     pub url: String,
+    pub channel_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -21,6 +22,8 @@ struct YtPlaylist {
 #[derive(Debug, Deserialize)]
 struct YtEntry {
     title: Option<String>,
+    channel: Option<String>,
+    uploader: Option<String>,
     webpage_url: Option<String>,
     url: Option<String>,
     id: Option<String>,
@@ -49,10 +52,15 @@ pub fn fetch_watch_later(
 
     let mut out = Vec::new();
     for entry in playlist.entries {
+        let channel_name = resolve_channel_name(&entry);
         let url = resolve_video_url(&entry);
         let title = entry.title.unwrap_or_else(|| "Untitled Video".to_string());
         if let Some(url) = url {
-            out.push(YtVideo { title, url });
+            out.push(YtVideo {
+                title,
+                url,
+                channel_name,
+            });
         }
     }
     Ok(out)
@@ -61,12 +69,24 @@ pub fn fetch_watch_later(
 pub fn summarize_watch_video(
     url: &str,
     pattern: &str,
+    channel_name: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let summary_markdown = run_fabric_youtube(url, pattern)?;
     let summary_html = markdown_to_html(&summary_markdown);
     let safe_url = escape_html(url);
+    let channel_html = channel_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            format!(
+                "<p class=\"article-source\">Channel: {}</p>\n",
+                escape_html(value)
+            )
+        })
+        .unwrap_or_default();
     Ok(format!(
-        "<p class=\"article-source\">Source: <a href=\"{url}\">{url}</a></p>\n{body}",
+        "{channel}<p class=\"article-source\">Source: <a href=\"{url}\">{url}</a></p>\n{body}",
+        channel = channel_html,
         url = safe_url,
         body = summary_html
     ))
@@ -107,6 +127,20 @@ fn resolve_video_url(entry: &YtEntry) -> Option<String> {
         .map(|id| format!("https://www.youtube.com/watch?v={}", id))
 }
 
+fn resolve_channel_name(entry: &YtEntry) -> Option<String> {
+    if let Some(channel) = entry.channel.as_deref().map(str::trim)
+        && !channel.is_empty()
+    {
+        return Some(channel.to_string());
+    }
+    if let Some(uploader) = entry.uploader.as_deref().map(str::trim)
+        && !uploader.is_empty()
+    {
+        return Some(uploader.to_string());
+    }
+    None
+}
+
 fn run_fabric_youtube(url: &str, pattern: &str) -> Result<String, Box<dyn std::error::Error>> {
     let output = Command::new("fabric-ai")
         .arg("-y")
@@ -139,12 +173,14 @@ fn markdown_to_html(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{YtEntry, markdown_to_html, resolve_video_url};
+    use super::{YtEntry, markdown_to_html, resolve_channel_name, resolve_video_url};
 
     #[test]
     fn resolves_video_url_in_priority_order() {
         let entry = YtEntry {
             title: Some("One".to_string()),
+            channel: None,
+            uploader: None,
             webpage_url: Some("https://youtube.com/watch?v=web".to_string()),
             url: Some("vid".to_string()),
             id: Some("id".to_string()),
@@ -156,6 +192,8 @@ mod tests {
 
         let entry = YtEntry {
             title: None,
+            channel: None,
+            uploader: None,
             webpage_url: None,
             url: Some("abc123".to_string()),
             id: None,
@@ -167,6 +205,8 @@ mod tests {
 
         let entry = YtEntry {
             title: None,
+            channel: None,
+            uploader: None,
             webpage_url: None,
             url: None,
             id: Some("id456".to_string()),
@@ -182,5 +222,34 @@ mod tests {
         let html = markdown_to_html("## Title\n\n- item");
         assert!(html.contains("<h2>Title</h2>"));
         assert!(html.contains("<li>item</li>"));
+    }
+
+    #[test]
+    fn resolves_channel_name_preferring_channel_then_uploader() {
+        let entry = YtEntry {
+            title: None,
+            channel: Some("  Channel Name ".to_string()),
+            uploader: Some("Uploader Name".to_string()),
+            webpage_url: None,
+            url: None,
+            id: None,
+        };
+        assert_eq!(
+            resolve_channel_name(&entry).as_deref(),
+            Some("Channel Name")
+        );
+
+        let entry = YtEntry {
+            title: None,
+            channel: Some("   ".to_string()),
+            uploader: Some("Uploader Name".to_string()),
+            webpage_url: None,
+            url: None,
+            id: None,
+        };
+        assert_eq!(
+            resolve_channel_name(&entry).as_deref(),
+            Some("Uploader Name")
+        );
     }
 }
