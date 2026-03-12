@@ -1,12 +1,12 @@
 use std::collections::HashSet;
-use std::env;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
 use chrono::Local;
+use clap::{CommandFactory, Parser};
 use reqwest::StatusCode;
 use reqwest::blocking::Client;
 use rmfeeder::multipdf;
@@ -15,6 +15,200 @@ use rmfeeder::{
     list_targets_csv, load_config_from_path, markdown, process_url_to_pdf_with_options, state,
     summarize_content_html, summarize_html, youtube,
 };
+
+const HELP_USAGE: &str = "\
+rmfeeder [OPTIONS] <url1> [url2 ...]
+       rmfeeder [OPTIONS] --file <path>
+       rmfeeder [OPTIONS] --feeds [--feeds-file <feeds.opml>]
+       rmfeeder [OPTIONS] --yt-watchlist
+       rmfeeder [OPTIONS] --markdown <path>
+       rmfeeder [OPTIONS] --markdown-dir <path>
+       rmfeeder [OPTIONS] --stdin
+       rmfeeder --clear-state
+       rmfeeder --list-targets";
+
+const HELP_AFTER: &str = "\
+Examples:
+  rmfeeder --feeds --limit 5
+  rmfeeder --yt-watchlist --yt-limit 20 --page-size rmpp
+  rmfeeder --markdown notes.md --summarize --pattern extract_wisdom
+  cat notes.md | rmfeeder --stdin --output note.pdf
+
+Defaults:
+  --config defaults to ~/.config/rmfeeder/rmfeeder.toml
+  --feeds uses ~/.config/rmfeeder/feeds.opml (or XDG_CONFIG_HOME)";
+
+#[derive(Debug, Parser)]
+#[command(
+    name = "rmfeeder",
+    about = "Build article/notes bundles as device-friendly PDFs",
+    long_about = None,
+    disable_help_subcommand = true,
+    next_line_help = true,
+    override_usage = HELP_USAGE,
+    after_help = HELP_AFTER
+)]
+struct CliArgs {
+    #[arg(
+        long,
+        value_name = "path",
+        help_heading = "Maintenance",
+        help = "Config file path (default: ~/.config/rmfeeder/rmfeeder.toml)"
+    )]
+    config: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "file.pdf",
+        help_heading = "Output & Rendering",
+        help = "Output PDF path (overrides timestamp naming)"
+    )]
+    output: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "path",
+        help_heading = "Source Input (choose exactly one)",
+        help = "Read URLs from a file (blank lines and # comments ignored)"
+    )]
+    file: Option<String>,
+
+    #[arg(
+        long,
+        help_heading = "Source Input (choose exactly one)",
+        help = "Use OPML feeds from default or configured path"
+    )]
+    feeds: bool,
+
+    #[arg(
+        long,
+        value_name = "feeds.opml",
+        help_heading = "Source Input (choose exactly one)",
+        help = "Use an explicit OPML file (implies --feeds)"
+    )]
+    feeds_file: Option<String>,
+
+    #[arg(
+        long,
+        help_heading = "Source Input (choose exactly one)",
+        help = "Pull from YouTube Watch Later"
+    )]
+    yt_watchlist: bool,
+
+    #[arg(
+        long,
+        value_name = "path",
+        help_heading = "Source Input (choose exactly one)",
+        help = "Convert one markdown file to a single PDF entry"
+    )]
+    markdown: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "path",
+        help_heading = "Source Input (choose exactly one)",
+        help = "Convert a directory of markdown files into one bundle"
+    )]
+    markdown_dir: Option<String>,
+
+    #[arg(
+        long,
+        help_heading = "Source Input (choose exactly one)",
+        help = "Read markdown content from stdin"
+    )]
+    stdin: bool,
+
+    #[arg(
+        value_name = "url",
+        help_heading = "Source Input (choose exactly one)",
+        help = "One or more direct URLs"
+    )]
+    urls: Vec<String>,
+
+    #[arg(
+        long,
+        value_name = "seconds",
+        help_heading = "Output & Rendering",
+        help = "Delay between fetches"
+    )]
+    delay: Option<u64>,
+
+    #[arg(
+        long,
+        value_name = "name",
+        help_heading = "Output & Rendering",
+        help = "Target device/page profile (run --list-targets)"
+    )]
+    page_size: Option<String>,
+
+    #[arg(
+        long,
+        help_heading = "Summarization",
+        help = "Use fabric to summarize content before rendering"
+    )]
+    summarize: bool,
+
+    #[arg(
+        long,
+        value_name = "name",
+        help_heading = "Summarization",
+        help = "fabric pattern to use (implies --summarize)"
+    )]
+    pattern: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "N",
+        help_heading = "YouTube Options",
+        help = "Limit only YouTube items"
+    )]
+    yt_limit: Option<usize>,
+
+    #[arg(
+        long,
+        value_name = "name",
+        help_heading = "YouTube Options",
+        help = "YouTube summary pattern (default: youtube_summary)"
+    )]
+    yt_pattern: Option<String>,
+
+    #[arg(
+        long,
+        value_name = "name",
+        help_heading = "YouTube Options",
+        help = "Browser/profile for auth cookies (default: chrome)"
+    )]
+    cookies_from_browser: Option<String>,
+
+    #[arg(
+        long,
+        help_heading = "YouTube Options",
+        help = "Do not mark processed videos as watched"
+    )]
+    no_mark_watched: bool,
+
+    #[arg(
+        long,
+        value_name = "N",
+        help_heading = "Output & Rendering",
+        help = "Shared item limit (feeds, yt, markdown-dir)"
+    )]
+    limit: Option<usize>,
+
+    #[arg(
+        long,
+        help_heading = "Maintenance",
+        help = "Clear seen-item state DB and exit (when no source is selected)"
+    )]
+    clear_state: bool,
+
+    #[arg(
+        long,
+        help_heading = "Maintenance",
+        help = "Print page-size target table as CSV and exit"
+    )]
+    list_targets: bool,
+}
 
 struct UrlCandidate {
     url: String,
@@ -41,13 +235,15 @@ enum SourceKind {
 }
 
 fn main() {
-    let raw_args: Vec<String> = env::args().skip(1).collect();
-    if raw_args.iter().any(|arg| arg == "--list-targets") {
+    let cli = CliArgs::parse();
+    if cli.list_targets {
         print!("{}", list_targets_csv());
         return;
     }
 
-    let config_path = extract_config_path(&raw_args)
+    let config_path = cli
+        .config
+        .clone()
         .unwrap_or_else(|| default_config_path().to_string_lossy().to_string());
 
     let config = match load_config_from_path(&config_path) {
@@ -58,8 +254,8 @@ fn main() {
         }
     };
 
-    let mut input_file: Option<String> = None;
-    let mut output_path: Option<String> = None;
+    let input_file: Option<String> = cli.file.clone();
+    let output_path: Option<String> = cli.output.clone();
     let mut output_dir: Option<String> = config.as_ref().and_then(|c| c.output_dir.clone());
     let mut delay_secs: u64 = config.as_ref().and_then(|c| c.delay).unwrap_or(0);
     let mut summarize = config.as_ref().and_then(|c| c.summarize).unwrap_or(false);
@@ -73,9 +269,9 @@ fn main() {
         .map(parse_page_size)
         .unwrap_or(PageSize::Letter);
 
-    let mut feeds_enabled = false;
-    let mut yt_watchlist_enabled = false;
-    let mut clear_state = false;
+    let mut feeds_enabled = cli.feeds;
+    let yt_watchlist_enabled = cli.yt_watchlist;
+    let clear_state = cli.clear_state;
 
     let mut feeds_limit: usize = config.as_ref().and_then(|c| c.limit).unwrap_or(3);
     let mut markdown_limit: Option<usize> = config.as_ref().and_then(|c| c.limit);
@@ -98,166 +294,54 @@ fn main() {
 
     let mut state_db_path: Option<String> = config.as_ref().and_then(|c| c.state_db_path.clone());
 
-    let mut direct_urls: Vec<String> = Vec::new();
-    let mut markdown_file: Option<String> = None;
-    let mut markdown_dir: Option<String> = None;
-    let mut stdin_enabled = false;
-    let mut explicit_input_requested = false;
+    let direct_urls: Vec<String> = cli.urls.clone();
+    let markdown_file: Option<String> = cli.markdown.clone();
+    let markdown_dir: Option<String> = cli.markdown_dir.clone();
+    let stdin_enabled = cli.stdin;
     let mut feeds_file_flag_used = false;
-
-    let mut args = raw_args.into_iter();
-    while let Some(arg) = args.next() {
-        if arg == "--help" || arg == "-h" {
-            print_usage_and_exit(0);
-        } else if arg == "--config" {
-            if args.next().is_none() {
-                eprintln!("Error: --config requires a path");
-                std::process::exit(1);
-            }
-        } else if arg.starts_with("--config=") {
-            continue;
-        } else if arg == "--output" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --output requires a filename");
-                std::process::exit(1);
-            });
-            output_path = Some(value);
-        } else if arg == "--file" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --file requires a path");
-                std::process::exit(1);
-            });
-            input_file = Some(value);
-            explicit_input_requested = true;
-        } else if arg == "--markdown" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --markdown requires a path");
-                std::process::exit(1);
-            });
-            markdown_file = Some(value);
-            explicit_input_requested = true;
-        } else if arg == "--markdown-dir" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --markdown-dir requires a path");
-                std::process::exit(1);
-            });
-            markdown_dir = Some(value);
-            explicit_input_requested = true;
-        } else if arg == "--stdin" {
-            stdin_enabled = true;
-            explicit_input_requested = true;
-        } else if arg == "--delay" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --delay requires a number");
-                std::process::exit(1);
-            });
-            delay_secs = parse_delay(&value);
-        } else if arg == "--page-size" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!(
-                    "Error: --page-size requires a value ({})",
-                    PageSize::VALUE_HINT
-                );
-                std::process::exit(1);
-            });
-            page_size = parse_page_size(&value);
-        } else if arg == "--summarize" {
-            summarize = true;
-        } else if arg == "--pattern" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --pattern requires a name");
-                std::process::exit(1);
-            });
-            pattern = value;
-            summarize = true;
-        } else if arg == "--feeds" {
-            feeds_enabled = true;
-            explicit_input_requested = true;
-        } else if arg == "--yt-watchlist" {
-            yt_watchlist_enabled = true;
-            explicit_input_requested = true;
-        } else if arg == "--clear-state" {
-            clear_state = true;
-        } else if arg == "--limit" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --limit requires a number");
-                std::process::exit(1);
-            });
-            let parsed = parse_limit(&value);
-            feeds_limit = parsed;
-            yt_limit = parsed;
-            markdown_limit = Some(parsed);
-        } else if arg == "--yt-limit" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --yt-limit requires a number");
-                std::process::exit(1);
-            });
-            yt_limit = parse_limit(&value);
-        } else if arg == "--yt-pattern" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --yt-pattern requires a name");
-                std::process::exit(1);
-            });
-            yt_pattern = value;
-        } else if arg == "--cookies-from-browser" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --cookies-from-browser requires a browser name");
-                std::process::exit(1);
-            });
-            yt_cookies_browser = value;
-        } else if arg == "--no-mark-watched" {
-            yt_mark_watched_on_success = false;
-        } else if arg == "--feeds-file" {
-            let value = args.next().unwrap_or_else(|| {
-                eprintln!("Error: --feeds-file requires a path");
-                std::process::exit(1);
-            });
-            opml_path = Some(value);
-            feeds_enabled = true;
-            feeds_file_flag_used = true;
-            explicit_input_requested = true;
-        } else if let Some(value) = arg.strip_prefix("--output=") {
-            output_path = Some(value.to_string());
-        } else if let Some(value) = arg.strip_prefix("--file=") {
-            input_file = Some(value.to_string());
-            explicit_input_requested = true;
-        } else if let Some(value) = arg.strip_prefix("--markdown=") {
-            markdown_file = Some(value.to_string());
-            explicit_input_requested = true;
-        } else if let Some(value) = arg.strip_prefix("--markdown-dir=") {
-            markdown_dir = Some(value.to_string());
-            explicit_input_requested = true;
-        } else if let Some(value) = arg.strip_prefix("--delay=") {
-            delay_secs = parse_delay(value);
-        } else if let Some(value) = arg.strip_prefix("--page-size=") {
-            page_size = parse_page_size(value);
-        } else if let Some(value) = arg.strip_prefix("--pattern=") {
-            pattern = value.to_string();
-            summarize = true;
-        } else if let Some(value) = arg.strip_prefix("--limit=") {
-            let parsed = parse_limit(value);
-            feeds_limit = parsed;
-            yt_limit = parsed;
-            markdown_limit = Some(parsed);
-        } else if let Some(value) = arg.strip_prefix("--yt-limit=") {
-            yt_limit = parse_limit(value);
-        } else if let Some(value) = arg.strip_prefix("--yt-pattern=") {
-            yt_pattern = value.to_string();
-        } else if let Some(value) = arg.strip_prefix("--cookies-from-browser=") {
-            yt_cookies_browser = value.to_string();
-        } else if let Some(value) = arg.strip_prefix("--feeds-file=") {
-            opml_path = Some(value.to_string());
-            feeds_enabled = true;
-            feeds_file_flag_used = true;
-            explicit_input_requested = true;
-        } else if arg.starts_with('-') {
-            eprintln!("Error: unexpected argument: {}", arg);
-            print_usage_and_exit(1);
-        } else {
-            direct_urls.push(arg);
-            explicit_input_requested = true;
-        }
+    if let Some(value) = cli.delay {
+        delay_secs = value;
     }
+    if let Some(value) = cli.page_size {
+        page_size = parse_page_size(&value);
+    }
+    if cli.summarize {
+        summarize = true;
+    }
+    if let Some(value) = cli.pattern {
+        pattern = value;
+        summarize = true;
+    }
+    if let Some(value) = cli.limit {
+        feeds_limit = value;
+        yt_limit = value;
+        markdown_limit = Some(value);
+    }
+    if let Some(value) = cli.yt_limit {
+        yt_limit = value;
+    }
+    if let Some(value) = cli.yt_pattern {
+        yt_pattern = value;
+    }
+    if let Some(value) = cli.cookies_from_browser {
+        yt_cookies_browser = value;
+    }
+    if cli.no_mark_watched {
+        yt_mark_watched_on_success = false;
+    }
+    if let Some(value) = cli.feeds_file {
+        opml_path = Some(value);
+        feeds_enabled = true;
+        feeds_file_flag_used = true;
+    }
+
+    let explicit_input_requested = !direct_urls.is_empty()
+        || input_file.is_some()
+        || feeds_enabled
+        || yt_watchlist_enabled
+        || markdown_file.is_some()
+        || markdown_dir.is_some()
+        || stdin_enabled;
 
     if clear_state && !explicit_input_requested {
         match state::init_state_db(true, state_db_path.take()) {
@@ -954,20 +1038,6 @@ fn render_output_path(prefix: &str, output_dir: Option<String>) -> String {
     }
 }
 
-fn parse_delay(value: &str) -> u64 {
-    value.parse::<u64>().unwrap_or_else(|_| {
-        eprintln!("Error: --delay must be a non-negative number");
-        std::process::exit(1);
-    })
-}
-
-fn parse_limit(value: &str) -> usize {
-    value.parse::<usize>().unwrap_or_else(|_| {
-        eprintln!("Error: --limit must be a positive number");
-        std::process::exit(1);
-    })
-}
-
 fn parse_page_size(value: &str) -> PageSize {
     PageSize::parse(value).unwrap_or_else(|| {
         eprintln!(
@@ -979,28 +1049,15 @@ fn parse_page_size(value: &str) -> PageSize {
 }
 
 fn print_usage_and_exit(code: i32) -> ! {
-    eprintln!(
-        "Usage: rmfeeder [--list-targets] [--config <path>] [--output <file.pdf>] [--file <path> | --feeds [--feeds-file <feeds.opml>] | --yt-watchlist | --markdown <path> | --markdown-dir <path> | --stdin | <url1> [url2] ...] [--delay N] [--page-size <{}>] [--summarize] [--pattern <name>] [--yt-limit N] [--yt-pattern <name>] [--cookies-from-browser <name>] [--no-mark-watched] [--clear-state] [--limit N]",
-        PageSize::VALUE_HINT
-    );
-    std::process::exit(code);
-}
-
-fn extract_config_path(args: &[String]) -> Option<String> {
-    let mut i = 0usize;
-    while i < args.len() {
-        let arg = &args[i];
-        if arg == "--config" {
-            if i + 1 >= args.len() {
-                eprintln!("Error: --config requires a path");
-                std::process::exit(1);
-            }
-            return Some(args[i + 1].clone());
-        }
-        if let Some(value) = arg.strip_prefix("--config=") {
-            return Some(value.to_string());
-        }
-        i += 1;
+    let mut command = CliArgs::command();
+    if code == 0 {
+        let mut out = std::io::stdout();
+        let _ = command.write_long_help(&mut out);
+        let _ = writeln!(&mut out);
+    } else {
+        let mut err = std::io::stderr();
+        let _ = command.write_long_help(&mut err);
+        let _ = writeln!(&mut err);
     }
-    None
+    std::process::exit(code);
 }
