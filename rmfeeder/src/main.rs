@@ -182,6 +182,14 @@ struct CliArgs {
 
     #[arg(
         long,
+        value_name = "path",
+        help_heading = "YouTube Options",
+        help = "Path to a Netscape-format cookies.txt file (alternative to --cookies-from-browser)"
+    )]
+    yt_cookies_file: Option<String>,
+
+    #[arg(
+        long,
         help_heading = "YouTube Options",
         help = "Do not mark processed videos as watched"
     )]
@@ -287,6 +295,9 @@ fn main() {
         .as_ref()
         .and_then(|c| c.yt_cookies_browser.clone())
         .unwrap_or_else(|| "chrome".to_string());
+    let mut yt_cookies_file: Option<String> = config
+        .as_ref()
+        .and_then(|c| c.yt_cookies_file.clone());
     let mut yt_mark_watched_on_success: bool = config
         .as_ref()
         .and_then(|c| c.yt_mark_watched_on_success)
@@ -325,6 +336,9 @@ fn main() {
     }
     if let Some(value) = cli.cookies_from_browser {
         yt_cookies_browser = value;
+    }
+    if let Some(value) = cli.yt_cookies_file {
+        yt_cookies_file = Some(value);
     }
     if cli.no_mark_watched {
         yt_mark_watched_on_success = false;
@@ -714,7 +728,7 @@ fn main() {
 
     if yt_watchlist_enabled {
         eprintln!("Fetching Watch Later list...");
-        let videos = match youtube::fetch_watch_later(&yt_cookies_browser) {
+        let videos = match youtube::fetch_watch_later(&yt_cookies_browser, yt_cookies_file.as_deref()) {
             Ok(videos) => videos,
             Err(e) => {
                 eprintln!("Error: failed to fetch watch list: {}", e);
@@ -788,7 +802,7 @@ fn main() {
             }
 
             if yt_mark_watched_on_success
-                && let Err(e) = youtube::mark_watched(&yt_cookies_browser, &video.url)
+                && let Err(e) = youtube::mark_watched(&yt_cookies_browser, yt_cookies_file.as_deref(), &video.url)
             {
                 eprintln!("Warning: failed to mark watched {}: {}", video.url, e);
             }

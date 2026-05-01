@@ -27,6 +27,7 @@ pub struct AppConfig {
     pub yt_pattern: Option<String>,
     pub yt_delay: Option<u64>,
     pub yt_cookies_browser: Option<String>,
+    pub yt_cookies_file: Option<String>,
     pub yt_mark_watched_on_success: Option<bool>,
     pub page_size: Option<String>,
 }

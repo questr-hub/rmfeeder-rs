@@ -31,10 +31,11 @@ struct YtEntry {
 
 pub fn fetch_watch_later(
     cookies_browser: &str,
+    cookies_file: Option<&str>,
 ) -> Result<Vec<YtVideo>, Box<dyn std::error::Error>> {
-    let output = Command::new("yt-dlp")
-        .arg("--cookies-from-browser")
-        .arg(cookies_browser)
+    let mut cmd = Command::new("yt-dlp");
+    add_cookies_args(&mut cmd, cookies_browser, cookies_file);
+    let output = cmd
         .arg("--flat-playlist")
         .arg("--dump-single-json")
         .arg(WATCH_LATER_URL)
@@ -92,10 +93,14 @@ pub fn summarize_watch_video(
     ))
 }
 
-pub fn mark_watched(cookies_browser: &str, url: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let output = Command::new("yt-dlp")
-        .arg("--cookies-from-browser")
-        .arg(cookies_browser)
+pub fn mark_watched(
+    cookies_browser: &str,
+    cookies_file: Option<&str>,
+    url: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut cmd = Command::new("yt-dlp");
+    add_cookies_args(&mut cmd, cookies_browser, cookies_file);
+    let output = cmd
         .arg("--mark-watched")
         .arg("--skip-download")
         .arg("--no-warnings")
@@ -109,6 +114,14 @@ pub fn mark_watched(cookies_browser: &str, url: &str) -> Result<(), Box<dyn std:
         return Err(format!("yt-dlp mark-watched failed: {}", stderr.trim()).into());
     }
     Ok(())
+}
+
+fn add_cookies_args(cmd: &mut Command, cookies_browser: &str, cookies_file: Option<&str>) {
+    if let Some(file) = cookies_file {
+        cmd.arg("--cookies").arg(file);
+    } else {
+        cmd.arg("--cookies-from-browser").arg(cookies_browser);
+    }
 }
 
 fn resolve_video_url(entry: &YtEntry) -> Option<String> {
