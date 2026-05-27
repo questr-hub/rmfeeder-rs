@@ -66,6 +66,33 @@ pub fn fetch_watch_later(
     Ok(out)
 }
 
+pub fn fetch_video_summary_text(
+    url: &str,
+    pattern: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    run_fabric_youtube(url, pattern)
+}
+
+pub fn summary_text_to_html(
+    summary_text: &str,
+    url: &str,
+    channel_name: Option<&str>,
+) -> String {
+    let summary_html = markdown_to_html(summary_text);
+    let safe_url = escape_html(url);
+    let channel_html = channel_name
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| format!("<p class=\"article-source\">Channel: {}</p>\n", escape_html(v)))
+        .unwrap_or_default();
+    format!(
+        "{channel}<p class=\"article-source\">Source: <a href=\"{url}\">{url}</a></p>\n{body}",
+        channel = channel_html,
+        url = safe_url,
+        body = summary_html
+    )
+}
+
 pub fn summarize_watch_video(
     url: &str,
     pattern: &str,

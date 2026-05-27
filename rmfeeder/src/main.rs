@@ -9,6 +9,7 @@ use chrono::Local;
 use clap::{CommandFactory, Parser};
 use reqwest::StatusCode;
 use reqwest::blocking::Client;
+use rmfeeder::categorize::{CategorizeInput, categorize};
 use rmfeeder::multipdf;
 use rmfeeder::{
     PageSize, default_config_path, default_feeds_opml_path, extractor, feeds, fetcher,
@@ -186,6 +187,13 @@ struct CliArgs {
         help = "Do not mark processed videos as watched"
     )]
     no_mark_watched: bool,
+
+    #[arg(
+        long,
+        help_heading = "YouTube Options",
+        help = "Skip LLM categorization; produce a flat bundle"
+    )]
+    no_categories: bool,
 
     #[arg(
         long,
@@ -722,7 +730,16 @@ fn main() {
             }
         };
 
+        struct CollectedYt {
+            title: String,
+            channel: Option<String>,
+            summary_text: String,
+            body_html: String,
+        }
+
+        let mut yt_collected: Vec<CollectedYt> = Vec::new();
         let mut yt_included = 0usize;
+
         for video in videos {
             if yt_included >= yt_limit {
                 break;
@@ -749,11 +766,7 @@ fn main() {
             }
 
             eprintln!("Processing {}", video.url);
-            let body_html = match youtube::summarize_watch_video(
-                &video.url,
-                &yt_pattern,
-                video.channel_name.as_deref(),
-            ) {
+            let summary_text = match youtube::fetch_video_summary_text(&video.url, &yt_pattern) {
                 Ok(value) => value,
                 Err(e) => {
                     failed += 1;
@@ -762,21 +775,28 @@ fn main() {
                 }
             };
 
+            let body_html = youtube::summary_text_to_html(
+                &summary_text,
+                &video.url,
+                video.channel_name.as_deref(),
+            );
+
             let article_title = if let Some(channel_name) = video
                 .channel_name
                 .as_deref()
                 .map(str::trim)
-                .filter(|value| !value.is_empty())
+                .filter(|v| !v.is_empty())
             {
                 format!("{} ({})", video.title, channel_name)
             } else {
                 video.title.clone()
             };
 
-            articles.push(multipdf::BundleArticle {
-                section: Some("YouTube Watchlist".to_string()),
+            yt_collected.push(CollectedYt {
                 title: article_title,
-                content_html: body_html,
+                channel: video.channel_name.clone(),
+                summary_text,
+                body_html,
             });
             included += 1;
             yt_included += 1;
@@ -795,6 +815,87 @@ fn main() {
 
             if yt_delay > 0 {
                 thread::sleep(Duration::from_secs(yt_delay));
+            }
+        }
+
+        let no_categories = cli.no_categories
+            || config.as_ref().and_then(|c| c.categorize).map(|v| !v).unwrap_or(false);
+
+        if !no_categories && yt_collected.len() > 1 {
+            let inputs: Vec<CategorizeInput> = yt_collected
+                .iter()
+                .enumerate()
+                .map(|(i, a)| CategorizeInput {
+                    index: i,
+                    title: a.title.clone(),
+                    channel: a.channel.clone(),
+                    summary: a.summary_text.clone(),
+                })
+                .collect();
+
+            match categorize(&inputs) {
+                Ok(cat_result) => {
+                    let n = yt_collected.len();
+                    let mut seen = HashSet::new();
+
+                    for group in &cat_result.categories {
+                        for &idx in &group.ordered_items {
+                            if idx >= n || !seen.insert(idx) {
+                                continue;
+                            }
+                            articles.push(multipdf::BundleArticle {
+                                section: Some(group.name.clone()),
+                                title: yt_collected[idx].title.clone(),
+                                content_html: yt_collected[idx].body_html.clone(),
+                            });
+                        }
+                    }
+                    for &idx in &cat_result.other {
+                        if idx >= n || !seen.insert(idx) {
+                            continue;
+                        }
+                        articles.push(multipdf::BundleArticle {
+                            section: Some("Other".to_string()),
+                            title: yt_collected[idx].title.clone(),
+                            content_html: yt_collected[idx].body_html.clone(),
+                        });
+                    }
+                    let unclaimed: Vec<usize> = (0..n).filter(|i| !seen.contains(i)).collect();
+                    if !unclaimed.is_empty() {
+                        eprintln!(
+                            "Warning: categorization omitted {} article(s); appending to Other",
+                            unclaimed.len()
+                        );
+                        for idx in unclaimed {
+                            articles.push(multipdf::BundleArticle {
+                                section: Some("Other".to_string()),
+                                title: yt_collected[idx].title.clone(),
+                                content_html: yt_collected[idx].body_html.clone(),
+                            });
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Warning: categorization failed ({}); falling back to flat list",
+                        e
+                    );
+                    for item in yt_collected {
+                        articles.push(multipdf::BundleArticle {
+                            section: Some("YouTube Watchlist".to_string()),
+                            title: item.title,
+                            content_html: item.body_html,
+                        });
+                    }
+                }
+            }
+        } else {
+            for item in yt_collected {
+                articles.push(multipdf::BundleArticle {
+                    section: Some("YouTube Watchlist".to_string()),
+                    title: item.title,
+                    content_html: item.body_html,
+                });
             }
         }
     }
