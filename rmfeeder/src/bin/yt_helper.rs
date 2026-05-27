@@ -8,12 +8,21 @@ use std::time::Duration;
 use chrono::Local;
 use pulldown_cmark::{Options, Parser, html};
 use rmfeeder::{
-    PageSize, default_config_path, escape_html, expand_tilde_path, load_config_from_path, multipdf,
+    PageSize, default_config_path, escape_html, expand_tilde_path, load_config_from_path,
+    categorize::{CategorizeInput, categorize},
+    multipdf::{BundleArticle, generate_pdf_bundle_with_sections},
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Deserialize;
 
 const WATCH_LATER_URL: &str = "https://www.youtube.com/playlist?list=WL";
+
+struct CollectedArticle {
+    title: String,
+    channel: Option<String>,
+    summary_text: String,
+    body_html: String,
+}
 
 fn main() {
     let raw_args: Vec<String> = env::args().skip(1).collect();
@@ -52,6 +61,11 @@ fn main() {
         .and_then(|c| c.page_size.as_deref())
         .map(parse_page_size)
         .unwrap_or(PageSize::Letter);
+    let mut no_categories: bool = config
+        .as_ref()
+        .and_then(|c| c.categorize)
+        .map(|v| !v)
+        .unwrap_or(false);
 
     let mut args = raw_args.into_iter();
     while let Some(arg) = args.next() {
@@ -117,6 +131,8 @@ fn main() {
             cookies_browser = value.to_string();
         } else if arg == "--dry-run" {
             dry_run = true;
+        } else if arg == "--no-categories" {
+            no_categories = true;
         } else if arg == "--clear-state" {
             clear_state = true;
         } else {
@@ -127,6 +143,7 @@ fn main() {
 
     if dry_run {
         mark_watched_on_success = false;
+        no_categories = true;
     }
 
     if clear_state && dry_run {
@@ -183,7 +200,7 @@ fn main() {
     let mut included = 0usize;
     let mut skipped = 0usize;
     let mut failed = 0usize;
-    let mut articles: Vec<(String, String)> = Vec::new();
+    let mut collected: Vec<CollectedArticle> = Vec::new();
 
     for video in videos {
         if included >= limit {
@@ -211,7 +228,7 @@ fn main() {
             }
         }
 
-        let summary_markdown = match run_fabric_youtube(&video.url, &pattern) {
+        let summary_text = match run_fabric_youtube(&video.url, &pattern) {
             Ok(text) => text,
             Err(e) => {
                 failed += 1;
@@ -220,7 +237,7 @@ fn main() {
             }
         };
 
-        let summary_html = markdown_to_html(&summary_markdown);
+        let summary_html = markdown_to_html(&summary_text);
         let safe_url = escape_html(&video.url);
         let body_html = format!(
             "<p class=\"article-source\">Source: <a href=\"{url}\">{url}</a></p>\n{body}",
@@ -228,7 +245,12 @@ fn main() {
             body = summary_html
         );
 
-        articles.push((video.title.clone(), body_html));
+        collected.push(CollectedArticle {
+            title: video.title.clone(),
+            channel: video.channel_name.clone(),
+            summary_text,
+            body_html,
+        });
         included += 1;
 
         if let Some(ref mut db) = state
@@ -248,7 +270,7 @@ fn main() {
         }
     }
 
-    if articles.is_empty() {
+    if collected.is_empty() {
         eprintln!("Error: no videos were included in output");
         eprintln!(
             "Summary: attempted={} included={} skipped={} failed={}",
@@ -257,8 +279,14 @@ fn main() {
         std::process::exit(1);
     }
 
-    if let Err(e) = multipdf::generate_pdf_bundle(
-        &articles,
+    let bundle_articles = if !no_categories && collected.len() > 1 {
+        build_categorized_articles(&collected)
+    } else {
+        build_flat_articles(&collected)
+    };
+
+    if let Err(e) = generate_pdf_bundle_with_sections(
+        &bundle_articles,
         &output_path,
         "rmfeeder ::",
         "YouTube Watchlist",
@@ -275,14 +303,115 @@ fn main() {
     println!("Wrote {}", output_path);
 }
 
+fn build_flat_articles(collected: &[CollectedArticle]) -> Vec<BundleArticle> {
+    collected
+        .iter()
+        .map(|a| BundleArticle {
+            section: None,
+            title: a.title.clone(),
+            content_html: a.body_html.clone(),
+        })
+        .collect()
+}
+
+fn build_categorized_articles(collected: &[CollectedArticle]) -> Vec<BundleArticle> {
+    let inputs: Vec<CategorizeInput> = collected
+        .iter()
+        .enumerate()
+        .map(|(i, a)| CategorizeInput {
+            index: i,
+            title: a.title.clone(),
+            channel: a.channel.clone(),
+            summary: a.summary_text.clone(),
+        })
+        .collect();
+
+    let cat_result = match categorize(&inputs) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!(
+                "Warning: categorization failed ({}); falling back to flat list",
+                e
+            );
+            return build_flat_articles(collected);
+        }
+    };
+
+    let n = collected.len();
+    let mut out: Vec<BundleArticle> = Vec::with_capacity(n);
+    let mut seen: HashSet<usize> = HashSet::new();
+
+    for group in &cat_result.categories {
+        for &idx in &group.ordered_items {
+            if idx >= n || !seen.insert(idx) {
+                if idx >= n {
+                    eprintln!(
+                        "Warning: categorization returned out-of-range index {}; skipping",
+                        idx
+                    );
+                }
+                continue;
+            }
+            out.push(BundleArticle {
+                section: Some(group.name.clone()),
+                title: collected[idx].title.clone(),
+                content_html: collected[idx].body_html.clone(),
+            });
+        }
+    }
+
+    for &idx in &cat_result.other {
+        if idx >= n || !seen.insert(idx) {
+            if idx >= n {
+                eprintln!(
+                    "Warning: categorization returned out-of-range index {} in other; skipping",
+                    idx
+                );
+            }
+            continue;
+        }
+        out.push(BundleArticle {
+            section: Some("Other".to_string()),
+            title: collected[idx].title.clone(),
+            content_html: collected[idx].body_html.clone(),
+        });
+    }
+
+    // Articles the LLM omitted entirely go into "Other" to prevent silent loss.
+    let unclaimed: Vec<usize> = (0..n).filter(|i| !seen.contains(i)).collect();
+    if !unclaimed.is_empty() {
+        eprintln!(
+            "Warning: categorization omitted {} article(s); appending to Other",
+            unclaimed.len()
+        );
+        for idx in unclaimed {
+            out.push(BundleArticle {
+                section: Some("Other".to_string()),
+                title: collected[idx].title.clone(),
+                content_html: collected[idx].body_html.clone(),
+            });
+        }
+    }
+
+    if out.is_empty() {
+        eprintln!("Warning: categorization produced no articles; falling back to flat list");
+        return build_flat_articles(collected);
+    }
+
+    out
+}
+
 fn print_usage_and_exit() -> ! {
     eprintln!(
-        "Usage: yt_helper --watch-later [--config <path>] [--output <file.pdf>] [--limit N] [--pattern <name>] [--delay N] [--page-size <{}>] [--cookies-from-browser <name>] [--dry-run] [--clear-state]",
+        "Usage: yt_helper --watch-later [--config <path>] [--output <file.pdf>] [--limit N] [--pattern <name>] [--delay N] [--page-size <{}>] [--cookies-from-browser <name>] [--no-categories] [--dry-run] [--clear-state]",
         PageSize::VALUE_HINT
     );
     eprintln!("   or: yt_helper [--config <path>] [--clear-state]");
     eprintln!(
-        "  --dry-run: Generate PDF without side effects (no local state read/write, no mark-watched updates)."
+        "  --dry-run: Generate PDF without side effects (no local state read/write, no mark-watched updates). Implies --no-categories."
+    );
+    eprintln!(
+        "  --no-categories: Skip LLM categorization and produce a flat bundle."
     );
     eprintln!(
         "  Note: Watch Later filtering is local-state based; remove items manually in YouTube UI when desired."
@@ -315,6 +444,7 @@ fn parse_page_size(value: &str) -> PageSize {
 struct YtVideo {
     title: String,
     url: String,
+    channel_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -325,6 +455,8 @@ struct YtPlaylist {
 #[derive(Debug, Deserialize)]
 struct YtEntry {
     title: Option<String>,
+    channel: Option<String>,
+    uploader: Option<String>,
     webpage_url: Option<String>,
     url: Option<String>,
     id: Option<String>,
@@ -351,10 +483,11 @@ fn fetch_watch_later(cookies_browser: &str) -> Result<Vec<YtVideo>, Box<dyn std:
 
     let mut out = Vec::new();
     for entry in playlist.entries {
+        let channel_name = resolve_channel_name(&entry);
         let url = resolve_video_url(&entry);
         let title = entry.title.unwrap_or_else(|| "Untitled Video".to_string());
         if let Some(url) = url {
-            out.push(YtVideo { title, url });
+            out.push(YtVideo { title, url, channel_name });
         }
     }
     Ok(out)
@@ -374,6 +507,20 @@ fn resolve_video_url(entry: &YtEntry) -> Option<String> {
         .id
         .as_ref()
         .map(|id| format!("https://www.youtube.com/watch?v={}", id))
+}
+
+fn resolve_channel_name(entry: &YtEntry) -> Option<String> {
+    if let Some(channel) = entry.channel.as_deref().map(str::trim)
+        && !channel.is_empty()
+    {
+        return Some(channel.to_string());
+    }
+    if let Some(uploader) = entry.uploader.as_deref().map(str::trim)
+        && !uploader.is_empty()
+    {
+        return Some(uploader.to_string());
+    }
+    None
 }
 
 fn run_fabric_youtube(url: &str, pattern: &str) -> Result<String, Box<dyn std::error::Error>> {

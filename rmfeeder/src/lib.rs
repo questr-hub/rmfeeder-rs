@@ -1,3 +1,4 @@
+pub mod categorize;
 pub mod epub;
 pub mod extractor;
 pub mod feeds;
@@ -29,6 +30,7 @@ pub struct AppConfig {
     pub yt_cookies_browser: Option<String>,
     pub yt_mark_watched_on_success: Option<bool>,
     pub page_size: Option<String>,
+    pub categorize: Option<bool>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
