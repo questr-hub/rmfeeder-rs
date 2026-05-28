@@ -1,11 +1,10 @@
-use std::env;
 use std::error::Error;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 use serde::{Deserialize, Serialize};
 
-const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_VERSION: &str = "2023-06-01";
-const MODEL: &str = "claude-haiku-4-5-20251001";
+const FABRIC_PATTERN: &str = "rmfeeder_categorize";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CategorizeInput {
@@ -29,58 +28,30 @@ pub struct CategorizeResult {
 }
 
 pub fn categorize(inputs: &[CategorizeInput]) -> Result<CategorizeResult, Box<dyn Error>> {
-    let api_key = env::var("ANTHROPIC_API_KEY")
-        .map_err(|_| "ANTHROPIC_API_KEY environment variable not set")?;
+    let payload = serde_json::to_string(inputs)?;
 
-    let items_json = serde_json::to_string(inputs)?;
+    let mut child = Command::new("fabric-ai")
+        .arg("--pattern")
+        .arg(FABRIC_PATTERN)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
 
-    let system = "You are a content organizer. Given a list of video summaries, group them into \
-        thematic categories for a reading bundle. Return ONLY valid JSON with no explanation, \
-        no markdown fencing, no extra text. Format: \
-        {\"categories\":[{\"name\":\"Category Name\",\"ordered_items\":[indices]}],\"other\":[indices]} \
-        Rules: \
-        - 3-6 categories with descriptive names \
-        - Order items within each category for logical reading flow \
-        - Items that don't fit any theme go in the top-level 'other' array \
-        - Every input index must appear exactly once across all categories and other \
-        - Return pure JSON only";
-
-    let user_content = format!(
-        "Categorize these {} videos into thematic groups:\n{}",
-        inputs.len(),
-        items_json
-    );
-
-    let request_body = serde_json::json!({
-        "model": MODEL,
-        "max_tokens": 4096,
-        "system": system,
-        "messages": [
-            {"role": "user", "content": user_content}
-        ]
-    });
-
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .post(ANTHROPIC_API_URL)
-        .header("x-api-key", &api_key)
-        .header("anthropic-version", ANTHROPIC_VERSION)
-        .header("content-type", "application/json")
-        .json(&request_body)
-        .send()?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().unwrap_or_default();
-        return Err(format!("API request failed with status {}: {}", status, body).into());
+    if let Some(stdin) = child.stdin.take() {
+        let mut stdin = stdin;
+        stdin.write_all(payload.as_bytes())?;
     }
 
-    let response_json: serde_json::Value = response.json()?;
-    let content = response_json["content"][0]["text"]
-        .as_str()
-        .ok_or("unexpected response shape from API")?;
+    let output = child.wait_with_output()?;
 
-    parse_categorize_response(content)
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("fabric-ai categorize failed: {}", stderr.trim()).into());
+    }
+
+    let response_text = String::from_utf8_lossy(&output.stdout);
+    parse_categorize_response(response_text.trim())
 }
 
 fn parse_categorize_response(text: &str) -> Result<CategorizeResult, Box<dyn Error>> {
