@@ -190,8 +190,8 @@ struct CliArgs {
 
     #[arg(
         long,
-        help_heading = "YouTube Options",
-        help = "Skip LLM categorization; produce a flat bundle"
+        help_heading = "Output & Rendering",
+        help = "Skip LLM categorization; produce a flat bundle (applies to all multi-item modes)"
     )]
     no_categories: bool,
 
@@ -223,6 +223,20 @@ struct UrlCandidate {
     source: &'static str,
     use_seen_state: bool,
     toc_section: Option<String>,
+}
+
+struct PendingArticle {
+    title: String,
+    source_hint: String,
+    summary_for_cat: String,
+    content_html: String,
+    fallback_section: Option<String>,
+}
+
+fn domain_from_url(url: &str) -> Option<String> {
+    url::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.trim_start_matches("www.").to_string()))
 }
 
 #[derive(Clone, Copy)]
@@ -446,6 +460,8 @@ fn main() {
             };
             render_output_path(prefix, output_dir.take())
         });
+        let no_categories = cli.no_categories
+            || config.as_ref().and_then(|c| c.categorize).map(|v| !v).unwrap_or(false);
         run_markdown_dir_mode(
             &path,
             &output_path,
@@ -453,6 +469,7 @@ fn main() {
             &pattern,
             markdown_limit,
             page_size,
+            no_categories,
         );
         return;
     }
@@ -559,7 +576,10 @@ fn main() {
         render_output_path(prefix, output_dir.take())
     });
 
-    let mut articles: Vec<multipdf::BundleArticle> = Vec::new();
+    let no_categories = cli.no_categories
+        || config.as_ref().and_then(|c| c.categorize).map(|v| !v).unwrap_or(false);
+
+    let mut pending: Vec<PendingArticle> = Vec::new();
     let mut attempted = 0usize;
     let mut included = 0usize;
     let mut skipped = 0usize;
@@ -698,10 +718,14 @@ fn main() {
             article.content.to_string()
         };
 
-        articles.push(multipdf::BundleArticle {
-            section: candidate.toc_section.clone(),
+        let source_hint = domain_from_url(&candidate.url)
+            .unwrap_or_else(|| candidate.source.to_string());
+        pending.push(PendingArticle {
+            summary_for_cat: title.clone(),
+            source_hint,
             title,
             content_html,
+            fallback_section: candidate.toc_section.clone(),
         });
         included += 1;
 
@@ -730,16 +754,7 @@ fn main() {
             }
         };
 
-        struct CollectedYt {
-            title: String,
-            channel: Option<String>,
-            summary_text: String,
-            body_html: String,
-        }
-
-        let mut yt_collected: Vec<CollectedYt> = Vec::new();
         let mut yt_included = 0usize;
-
         for video in videos {
             if yt_included >= yt_limit {
                 break;
@@ -792,11 +807,12 @@ fn main() {
                 video.title.clone()
             };
 
-            yt_collected.push(CollectedYt {
+            pending.push(PendingArticle {
+                source_hint: video.channel_name.clone().unwrap_or_else(|| "YouTube".to_string()),
+                summary_for_cat: summary_text,
                 title: article_title,
-                channel: video.channel_name.clone(),
-                summary_text,
-                body_html,
+                content_html: body_html,
+                fallback_section: Some("YouTube Watchlist".to_string()),
             });
             included += 1;
             yt_included += 1;
@@ -817,88 +833,9 @@ fn main() {
                 thread::sleep(Duration::from_secs(yt_delay));
             }
         }
-
-        let no_categories = cli.no_categories
-            || config.as_ref().and_then(|c| c.categorize).map(|v| !v).unwrap_or(false);
-
-        if !no_categories && yt_collected.len() > 1 {
-            let inputs: Vec<CategorizeInput> = yt_collected
-                .iter()
-                .enumerate()
-                .map(|(i, a)| CategorizeInput {
-                    index: i,
-                    title: a.title.clone(),
-                    channel: a.channel.clone(),
-                    summary: a.summary_text.clone(),
-                })
-                .collect();
-
-            match categorize(&inputs) {
-                Ok(cat_result) => {
-                    let n = yt_collected.len();
-                    let mut seen = HashSet::new();
-
-                    for group in &cat_result.categories {
-                        for &idx in &group.ordered_items {
-                            if idx >= n || !seen.insert(idx) {
-                                continue;
-                            }
-                            articles.push(multipdf::BundleArticle {
-                                section: Some(group.name.clone()),
-                                title: yt_collected[idx].title.clone(),
-                                content_html: yt_collected[idx].body_html.clone(),
-                            });
-                        }
-                    }
-                    for &idx in &cat_result.other {
-                        if idx >= n || !seen.insert(idx) {
-                            continue;
-                        }
-                        articles.push(multipdf::BundleArticle {
-                            section: Some("Other".to_string()),
-                            title: yt_collected[idx].title.clone(),
-                            content_html: yt_collected[idx].body_html.clone(),
-                        });
-                    }
-                    let unclaimed: Vec<usize> = (0..n).filter(|i| !seen.contains(i)).collect();
-                    if !unclaimed.is_empty() {
-                        eprintln!(
-                            "Warning: categorization omitted {} article(s); appending to Other",
-                            unclaimed.len()
-                        );
-                        for idx in unclaimed {
-                            articles.push(multipdf::BundleArticle {
-                                section: Some("Other".to_string()),
-                                title: yt_collected[idx].title.clone(),
-                                content_html: yt_collected[idx].body_html.clone(),
-                            });
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Warning: categorization failed ({}); falling back to flat list",
-                        e
-                    );
-                    for item in yt_collected {
-                        articles.push(multipdf::BundleArticle {
-                            section: Some("YouTube Watchlist".to_string()),
-                            title: item.title,
-                            content_html: item.body_html,
-                        });
-                    }
-                }
-            }
-        } else {
-            for item in yt_collected {
-                articles.push(multipdf::BundleArticle {
-                    section: Some("YouTube Watchlist".to_string()),
-                    title: item.title,
-                    content_html: item.body_html,
-                });
-            }
-        }
     }
+
+    let articles = build_articles(pending, no_categories);
 
     if articles.is_empty() {
         eprintln!("Error: no items were included in output");
@@ -977,6 +914,102 @@ fn run_markdown_file_mode(
     }
 }
 
+fn build_articles(pending: Vec<PendingArticle>, no_categories: bool) -> Vec<multipdf::BundleArticle> {
+    if no_categories || pending.len() <= 1 {
+        return pending
+            .into_iter()
+            .map(|p| multipdf::BundleArticle {
+                section: p.fallback_section,
+                title: p.title,
+                content_html: p.content_html,
+            })
+            .collect();
+    }
+
+    let inputs: Vec<CategorizeInput> = pending
+        .iter()
+        .enumerate()
+        .map(|(i, p)| CategorizeInput {
+            index: i,
+            title: p.title.clone(),
+            channel: Some(p.source_hint.clone()),
+            summary: p.summary_for_cat.clone(),
+        })
+        .collect();
+
+    match categorize(&inputs) {
+        Ok(cat_result) => {
+            let n = pending.len();
+            let mut out = Vec::with_capacity(n);
+            let mut seen = HashSet::new();
+
+            for group in &cat_result.categories {
+                for &idx in &group.ordered_items {
+                    if idx >= n || !seen.insert(idx) {
+                        continue;
+                    }
+                    out.push(multipdf::BundleArticle {
+                        section: Some(group.name.clone()),
+                        title: pending[idx].title.clone(),
+                        content_html: pending[idx].content_html.clone(),
+                    });
+                }
+            }
+            for &idx in &cat_result.other {
+                if idx >= n || !seen.insert(idx) {
+                    continue;
+                }
+                out.push(multipdf::BundleArticle {
+                    section: Some("Other".to_string()),
+                    title: pending[idx].title.clone(),
+                    content_html: pending[idx].content_html.clone(),
+                });
+            }
+            let unclaimed: Vec<usize> = (0..n).filter(|i| !seen.contains(i)).collect();
+            if !unclaimed.is_empty() {
+                eprintln!(
+                    "Warning: categorization omitted {} article(s); appending to Other",
+                    unclaimed.len()
+                );
+                for idx in unclaimed {
+                    out.push(multipdf::BundleArticle {
+                        section: Some("Other".to_string()),
+                        title: pending[idx].title.clone(),
+                        content_html: pending[idx].content_html.clone(),
+                    });
+                }
+            }
+            if out.is_empty() {
+                eprintln!("Warning: categorization produced no articles; falling back to flat list");
+                pending
+                    .into_iter()
+                    .map(|p| multipdf::BundleArticle {
+                        section: p.fallback_section,
+                        title: p.title,
+                        content_html: p.content_html,
+                    })
+                    .collect()
+            } else {
+                out
+            }
+        }
+        Err(e) => {
+            eprintln!(
+                "Warning: categorization failed ({}); falling back to flat list",
+                e
+            );
+            pending
+                .into_iter()
+                .map(|p| multipdf::BundleArticle {
+                    section: p.fallback_section,
+                    title: p.title,
+                    content_html: p.content_html,
+                })
+                .collect()
+        }
+    }
+}
+
 fn run_markdown_dir_mode(
     path: &str,
     output_path: &str,
@@ -984,6 +1017,7 @@ fn run_markdown_dir_mode(
     pattern: &str,
     limit: Option<usize>,
     page_size: PageSize,
+    no_categories: bool,
 ) {
     let dir_path = PathBuf::from(path);
     if !dir_path.is_dir() {
@@ -1008,7 +1042,7 @@ fn run_markdown_dir_mode(
         std::process::exit(1);
     }
 
-    let mut articles = Vec::with_capacity(markdown_files.len());
+    let mut pending: Vec<PendingArticle> = Vec::with_capacity(markdown_files.len());
     for file_path in markdown_files {
         let article = markdown_file_to_bundle_article(&file_path, summarize, pattern)
             .unwrap_or_else(|e| {
@@ -1019,8 +1053,16 @@ fn run_markdown_dir_mode(
                 );
                 std::process::exit(1);
             });
-        articles.push(article);
+        pending.push(PendingArticle {
+            summary_for_cat: article.title.clone(),
+            source_hint: "markdown".to_string(),
+            title: article.title,
+            content_html: article.content_html,
+            fallback_section: None,
+        });
     }
+
+    let articles = build_articles(pending, no_categories);
 
     let bundle_title = dir_path
         .file_name()

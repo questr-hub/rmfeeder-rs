@@ -35,7 +35,7 @@ main {
 /* Headings */
 h1 {
   font-family: "Avenir Next", -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: 1.85em;
+  font-size: 1.55em;
   margin: 0 0 0.3em 0;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -51,15 +51,15 @@ h2, h3, h4, h5, h6 {
 }
 
 h2 {
-  font-size: 1.4em;
+  font-size: 1.25em;
 }
 
 h3 {
-  font-size: 1.2em;
+  font-size: 1.1em;
 }
 
 h4, h5, h6 {
-  font-size: 1.05em;
+  font-size: 1.0em;
 }
 
 /* Paragraphs */
