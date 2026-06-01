@@ -12,9 +12,9 @@ use reqwest::blocking::Client;
 use rmfeeder::categorize::{CategorizeInput, categorize};
 use rmfeeder::multipdf;
 use rmfeeder::{
-    PageSize, default_config_path, default_feeds_opml_path, extractor, feeds, fetcher,
-    list_targets_csv, load_config_from_path, markdown, process_url_to_pdf_with_options, state,
-    summarize_content_html, summarize_html, youtube,
+    PageSize, default_config_path, default_feeds_opml_path, expand_tilde_path, extractor, feeds,
+    fetcher, list_targets_csv, load_config_from_path, markdown, process_url_to_pdf_with_options,
+    state, summarize_content_html, summarize_html, youtube,
 };
 
 const HELP_USAGE: &str = "\
@@ -277,7 +277,9 @@ fn main() {
     };
 
     let input_file: Option<String> = cli.file.clone();
-    let output_path: Option<String> = cli.output.clone();
+    let output_path: Option<String> = cli.output.as_deref().map(|p| {
+        expand_tilde_path(p).to_string_lossy().into_owned()
+    });
     let mut output_dir: Option<String> = config.as_ref().and_then(|c| c.output_dir.clone());
     let mut delay_secs: u64 = config.as_ref().and_then(|c| c.delay).unwrap_or(0);
     let mut summarize = config.as_ref().and_then(|c| c.summarize).unwrap_or(false);
