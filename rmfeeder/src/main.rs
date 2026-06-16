@@ -441,27 +441,15 @@ fn main() {
     let selected_source_kind = selected_sources.first().map(|s| s.kind);
 
     if let Some(path) = markdown_file {
-        let output_path = output_path.unwrap_or_else(|| {
-            let prefix = if summarize {
-                "single-summary"
-            } else {
-                "single"
-            };
-            render_output_path(prefix, output_dir.take())
-        });
+        let output_path =
+            output_path.unwrap_or_else(|| render_output_path("Note", summarize, output_dir.take()));
         run_markdown_file_mode(&path, &output_path, summarize, &pattern, page_size);
         return;
     }
 
     if let Some(path) = markdown_dir {
-        let output_path = output_path.unwrap_or_else(|| {
-            let prefix = if summarize {
-                "bundle-summary"
-            } else {
-                "bundle"
-            };
-            render_output_path(prefix, output_dir.take())
-        });
+        let output_path = output_path
+            .unwrap_or_else(|| render_output_path("Notes", summarize, output_dir.take()));
         let no_categories = cli.no_categories
             || config.as_ref().and_then(|c| c.categorize).map(|v| !v).unwrap_or(false);
         run_markdown_dir_mode(
@@ -477,14 +465,8 @@ fn main() {
     }
 
     if stdin_enabled {
-        let output_path = output_path.unwrap_or_else(|| {
-            let prefix = if summarize {
-                "single-summary"
-            } else {
-                "single"
-            };
-            render_output_path(prefix, output_dir.take())
-        });
+        let output_path =
+            output_path.unwrap_or_else(|| render_output_path("Note", summarize, output_dir.take()));
         run_stdin_mode(&output_path, summarize, &pattern, page_size);
         return;
     }
@@ -530,14 +512,8 @@ fn main() {
     }
 
     if selected_source_kind == Some(SourceKind::UrlArgs) && direct_urls.len() == 1 {
-        let output_path = output_path.unwrap_or_else(|| {
-            let prefix = if summarize {
-                "single-summary"
-            } else {
-                "single"
-            };
-            render_output_path(prefix, output_dir.take())
-        });
+        let output_path = output_path
+            .unwrap_or_else(|| render_output_path("Article", summarize, output_dir.take()));
 
         eprintln!(
             "Mode: {}",
@@ -570,12 +546,16 @@ fn main() {
     }
 
     let output_path = output_path.unwrap_or_else(|| {
-        let prefix = if summarize || yt_watchlist_enabled {
-            "bundle-summary"
+        // Label by source type; YT is inherently summarized so it never gets a
+        // redundant " Summary" tag.
+        let (base_label, summary_suffix) = if yt_watchlist_enabled {
+            ("YT Watchlist", false)
+        } else if feeds_enabled {
+            ("Feeds", summarize)
         } else {
-            "bundle"
+            ("URLs", summarize)
         };
-        render_output_path(prefix, output_dir.take())
+        render_output_path(base_label, summary_suffix, output_dir.take())
     });
 
     let no_categories = cli.no_categories
@@ -1185,11 +1165,23 @@ fn markdown_content_to_bundle_article(
     })
 }
 
-fn render_output_path(prefix: &str, output_dir: Option<String>) -> String {
+/// Build a human-friendly, well-sorting default filename:
+/// `YYYY-MM-DD (Ddd) <Label> HHMM.pdf` (e.g. `2026-06-15 (Mon) Feeds 1430.pdf`).
+/// Date-first so it sorts chronologically under name-sort; 24h compact time
+/// because `:` is not filesystem-safe. `summarize` appends " Summary".
+fn render_output_path(base_label: &str, summarize: bool, output_dir: Option<String>) -> String {
+    let label = if summarize {
+        format!("{} Summary", base_label)
+    } else {
+        base_label.to_string()
+    };
+    let now = Local::now();
     let filename = format!(
-        "{}-{}.pdf",
-        prefix,
-        Local::now().format("%Y-%m-%d-%H-%M-%S")
+        "{} ({}) {} {}.pdf",
+        now.format("%Y-%m-%d"),
+        now.format("%a"),
+        label,
+        now.format("%H%M")
     );
     if let Some(dir) = output_dir {
         Path::new(&dir).join(filename).to_string_lossy().to_string()

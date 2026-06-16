@@ -212,17 +212,33 @@ This writes predictable PDFs to `test-output/targets/<flag>.pdf`.
 
 ### **Default Output Filenames**
 
-If `--output` is not provided, filenames are mode-based and timestamped:
+If `--output` is not provided, filenames are human-readable and date-first so they
+sort chronologically on e-readers (Kindle Scribe / reMarkable) under either Name or
+Recent sort. The pattern is:
 
-- `rmfeeder` single URL: `single-YYYY-MM-DD-HH-MM-SS.pdf`
-- `rmfeeder` single URL + `--summarize`: `single-summary-YYYY-MM-DD-HH-MM-SS.pdf`
-- `rmfeeder` with `--markdown`: `single-YYYY-MM-DD-HH-MM-SS.pdf`
-- `rmfeeder` with `--stdin`: `single-YYYY-MM-DD-HH-MM-SS.pdf`
-- `rmfeeder` bundle (multiple URLs or any `--file`): `bundle-YYYY-MM-DD-HH-MM-SS.pdf`
-- `rmfeeder` with `--markdown-dir`: `bundle-YYYY-MM-DD-HH-MM-SS.pdf`
-- `rmfeeder` bundle + `--summarize`: `bundle-summary-YYYY-MM-DD-HH-MM-SS.pdf`
-- `rmfeeder` with `--yt-watchlist`: `bundle-summary-YYYY-MM-DD-HH-MM-SS.pdf`
-- `yt_helper` watch later (legacy helper): `yt-watchlist-YYYY-MM-DD-HH-MM-SS.pdf`
+```
+YYYY-MM-DD (Ddd) <Label> [Summary] HHMM.pdf
+```
+
+- Date-first (`YYYY-MM-DD`) sorts chronologically under name-sort and reads naturally.
+- `(Ddd)` is the 3-letter weekday (e.g. `Mon`).
+- Time is 24-hour, compact `HHMM` (no `:` — not filesystem-safe).
+- `Summary` is inserted only when `--summarize` is used.
+
+Label by source mode:
+
+| Source | Label | Example |
+|---|---|---|
+| Single URL | `Article` | `2026-06-15 (Mon) Article 0905.pdf` |
+| Multiple URLs / `--file` | `URLs` | `2026-06-15 (Mon) URLs 0700.pdf` |
+| `--feeds` | `Feeds` | `2026-06-15 (Mon) Feeds 1430.pdf` |
+| `--feeds --summarize` | `Feeds Summary` | `2026-06-15 (Mon) Feeds Summary 1430.pdf` |
+| `--yt-watchlist` | `YT Watchlist` | `2026-06-15 (Mon) YT Watchlist 0815.pdf` |
+| `--markdown` / `--stdin` | `Note` | `2026-06-15 (Mon) Note 1907.pdf` |
+| `--markdown-dir` | `Notes` | `2026-06-15 (Mon) Notes 1830.pdf` |
+| `yt_helper` (legacy helper) | `YT Watchlist` | `2026-06-15 (Mon) YT Watchlist 0815.pdf` |
+
+`--yt-watchlist` is inherently summary-driven, so it never adds a redundant `Summary`.
 
 `--output` always overrides default naming.
 

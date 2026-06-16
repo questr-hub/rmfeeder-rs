@@ -162,9 +162,13 @@ fn main() {
     }
 
     let output_path = output_path.unwrap_or_else(|| {
+        // Matches rmfeeder's scheme: YYYY-MM-DD (Ddd) YT Watchlist HHMM.pdf
+        let now = Local::now();
         let filename = format!(
-            "yt-watchlist-{}.pdf",
-            Local::now().format("%Y-%m-%d-%H-%M-%S")
+            "{} ({}) YT Watchlist {}.pdf",
+            now.format("%Y-%m-%d"),
+            now.format("%a"),
+            now.format("%H%M")
         );
         if let Some(dir) = output_dir.take() {
             Path::new(&dir).join(filename).to_string_lossy().to_string()
