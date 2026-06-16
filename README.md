@@ -181,6 +181,7 @@ Supported target values (canonical flags):
 | `rmpp` | 1620x2160 | reMarkable Paper Pro |
 | `rmpp-move` | 1620x2160 | reMarkable Paper Pro Move |
 | `scribe` | 1860x2480 | Kindle Scribe |
+| `scribe-colorsoft` | 1980x2640 | Kindle Scribe Colorsoft (B/W) |
 | `supernote-a5x` | 1920x2560 | Supernote A5X |
 | `supernote-a5x2` | 1920x2560 | Supernote A5X2 |
 | `supernote-a6x` | 1404x1872 | Supernote A6X |

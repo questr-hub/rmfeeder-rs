@@ -41,6 +41,7 @@ pub enum PageSize {
     Rpp,
     RppMove,
     Scribe,
+    ScribeColorsoft,
     SupernoteA5x,
     SupernoteA5x2,
     SupernoteA6x,
@@ -69,8 +70,8 @@ pub struct TargetSpec {
 }
 
 impl PageSize {
-    pub const VALUE_HINT: &'static str = "letter|rm1|rm2|rmpp|rmpp-move|scribe|supernote-a5x|supernote-a5x2|supernote-a6x|supernote-a6x2|boox-go103|boox-noteair|boox-noteair4c|boox-noteair4c-color|boox-notemax|a6|a5|a4|ipad11|ipad13";
-    pub const VALUE_LIST: &'static str = "letter, rm1, rm2, rmpp, rmpp-move, scribe, supernote-a5x, supernote-a5x2, supernote-a6x, supernote-a6x2, boox-go103, boox-noteair, boox-noteair4c, boox-noteair4c-color, boox-notemax, a6, a5, a4, ipad11, ipad13";
+    pub const VALUE_HINT: &'static str = "letter|rm1|rm2|rmpp|rmpp-move|scribe|scribe-colorsoft|supernote-a5x|supernote-a5x2|supernote-a6x|supernote-a6x2|boox-go103|boox-noteair|boox-noteair4c|boox-noteair4c-color|boox-notemax|a6|a5|a4|ipad11|ipad13";
+    pub const VALUE_LIST: &'static str = "letter, rm1, rm2, rmpp, rmpp-move, scribe, scribe-colorsoft, supernote-a5x, supernote-a5x2, supernote-a6x, supernote-a6x2, boox-go103, boox-noteair, boox-noteair4c, boox-noteair4c-color, boox-notemax, a6, a5, a4, ipad11, ipad13";
 
     pub fn parse(value: &str) -> Option<Self> {
         let normalized = value.trim().to_ascii_lowercase();
@@ -154,7 +155,7 @@ fn pixels_to_mm(px: u32, dpi: u16) -> f64 {
     (px as f64) * 25.4 / (dpi as f64)
 }
 
-const TARGET_SPECS: [TargetSpec; 20] = [
+const TARGET_SPECS: [TargetSpec; 21] = [
     TargetSpec {
         page_size: PageSize::Letter,
         flag: "letter",
@@ -214,6 +215,15 @@ const TARGET_SPECS: [TargetSpec; 20] = [
         height_px: 2480,
         dpi: 300,
         description: "Kindle Scribe",
+    },
+    TargetSpec {
+        page_size: PageSize::ScribeColorsoft,
+        flag: "scribe-colorsoft",
+        aliases: &[],
+        width_px: 1980,
+        height_px: 2640,
+        dpi: 300,
+        description: "Kindle Scribe Colorsoft",
     },
     TargetSpec {
         page_size: PageSize::SupernoteA5x,
