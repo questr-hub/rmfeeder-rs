@@ -19,5 +19,5 @@ fn list_targets_outputs_stable_csv() {
     assert!(stdout.contains("ipad13,2064,2752,iPad Pro 13-inch\n"));
 
     let line_count = stdout.lines().count();
-    assert_eq!(line_count, 21, "header + 20 targets expected");
+    assert_eq!(line_count, 22, "header + 21 targets expected");
 }

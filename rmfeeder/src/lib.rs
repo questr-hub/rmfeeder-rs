@@ -626,6 +626,6 @@ mod tests {
         assert!(listing.contains("boox-noteair4c-color,930,1240,Boox Note Air4 C Color Layer\n"));
         assert!(listing.contains("a4,2480,3508,ISO A4\n"));
         assert!(listing.contains("ipad13,2064,2752,iPad Pro 13-inch\n"));
-        assert_eq!(PageSize::all_targets().len(), 20);
+        assert_eq!(PageSize::all_targets().len(), 21);
     }
 }

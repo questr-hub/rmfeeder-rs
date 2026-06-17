@@ -213,6 +213,20 @@ struct CliArgs {
     #[arg(
         long,
         help_heading = "Maintenance",
+        help = "Clear only feed article state and exit (when no source is selected)"
+    )]
+    clear_feeds_state: bool,
+
+    #[arg(
+        long,
+        help_heading = "Maintenance",
+        help = "Clear only YouTube watchlist state and exit (when no source is selected)"
+    )]
+    clear_yt_state: bool,
+
+    #[arg(
+        long,
+        help_heading = "Maintenance",
         help = "Print page-size target table as CSV and exit"
     )]
     list_targets: bool,
@@ -296,6 +310,8 @@ fn main() {
     let mut feeds_enabled = cli.feeds;
     let yt_watchlist_enabled = cli.yt_watchlist;
     let clear_state = cli.clear_state;
+    let clear_feeds_state = cli.clear_feeds_state;
+    let clear_yt_state = cli.clear_yt_state;
 
     let mut feeds_limit: usize = config.as_ref().and_then(|c| c.limit).unwrap_or(3);
     let mut markdown_limit: Option<usize> = config.as_ref().and_then(|c| c.limit);
@@ -367,15 +383,27 @@ fn main() {
         || markdown_dir.is_some()
         || stdin_enabled;
 
-    if clear_state && !explicit_input_requested {
-        match state::init_state_db(true, state_db_path.take()) {
-            Ok(_) => {
-                println!("Cleared state DB");
-                return;
-            }
-            Err(e) => {
-                eprintln!("Error: failed to clear state DB: {}", e);
-                std::process::exit(1);
+    let clear_mode_for_exit = if clear_state {
+        Some((state::ClearMode::All, "Cleared state DB"))
+    } else if clear_feeds_state {
+        Some((state::ClearMode::Feeds, "Cleared feeds state"))
+    } else if clear_yt_state {
+        Some((state::ClearMode::Yt, "Cleared YouTube state"))
+    } else {
+        None
+    };
+
+    if let Some((mode, msg)) = clear_mode_for_exit {
+        if !explicit_input_requested {
+            match state::init_state_db(mode, state_db_path.take()) {
+                Ok(_) => {
+                    println!("{}", msg);
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("Error: failed to clear state DB: {}", e);
+                    std::process::exit(1);
+                }
             }
         }
     }
@@ -567,8 +595,18 @@ fn main() {
     let mut skipped = 0usize;
     let mut failed = 0usize;
 
-    let mut state = if clear_state || feeds_enabled || yt_watchlist_enabled {
-        match state::init_state_db(clear_state, state_db_path.take()) {
+    let clear_mode = if clear_state {
+        state::ClearMode::All
+    } else if clear_feeds_state {
+        state::ClearMode::Feeds
+    } else if clear_yt_state {
+        state::ClearMode::Yt
+    } else {
+        state::ClearMode::None
+    };
+
+    let mut state = if !matches!(clear_mode, state::ClearMode::None) || feeds_enabled || yt_watchlist_enabled {
+        match state::init_state_db(clear_mode, state_db_path.take()) {
             Ok(db) => Some(db),
             Err(e) => {
                 eprintln!("Error: failed to initialize state DB: {}", e);
